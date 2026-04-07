@@ -1,2 +1,0 @@
-[console_scripts]
-service-health-assistant = service_health_assistant.server:main
