@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/service_health_assistant/__init__.py
+src/service_health_assistant/models.py
+src/service_health_assistant/rules.py
+src/service_health_assistant/server.py
+src/service_health_assistant.egg-info/PKG-INFO
+src/service_health_assistant.egg-info/SOURCES.txt
+src/service_health_assistant.egg-info/dependency_links.txt
+src/service_health_assistant.egg-info/entry_points.txt
+src/service_health_assistant.egg-info/requires.txt
+src/service_health_assistant.egg-info/top_level.txt
+tests/test_rules.py
