@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ServiceHealthAssistant.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2d9adb466aab22968fa7c78595e90084ff4ea206")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2face924e83c8f7293a221ad2bfe6b886a52093d")]
 [assembly: System.Reflection.AssemblyProductAttribute("ServiceHealthAssistant.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ServiceHealthAssistant.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
