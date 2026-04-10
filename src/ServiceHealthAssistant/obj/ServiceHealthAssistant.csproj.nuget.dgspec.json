@@ -1,25 +1,31 @@
 {
   "format": 1,
   "restore": {
-    "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj": {}
+    "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\src\\ServiceHealthAssistant\\ServiceHealthAssistant.csproj": {}
   },
   "projects": {
-    "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj": {
+    "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\src\\ServiceHealthAssistant\\ServiceHealthAssistant.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj",
+        "projectUniqueName": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\src\\ServiceHealthAssistant\\ServiceHealthAssistant.csproj",
         "projectName": "ServiceHealthAssistant",
-        "projectPath": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj",
-        "packagesPath": "/tmp/codeql-scratch-a8b9226fdaa4b051/dbs/csharp/working/packages",
-        "outputPath": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/obj/",
+        "projectPath": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\src\\ServiceHealthAssistant\\ServiceHealthAssistant.csproj",
+        "packagesPath": "C:\\Users\\jygupt\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\src\\ServiceHealthAssistant\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/home/runner/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\jygupt\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -38,7 +44,7 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "10.0.200"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net8.0": {
@@ -64,26 +70,12 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
-          "downloadDependencies": [
-            {
-              "name": "Microsoft.AspNetCore.App.Ref",
-              "version": "[8.0.25, 8.0.25]"
-            },
-            {
-              "name": "Microsoft.NETCore.App.Host.linux-x64",
-              "version": "[8.0.25, 8.0.25]"
-            },
-            {
-              "name": "Microsoft.NETCore.App.Ref",
-              "version": "[8.0.25, 8.0.25]"
-            }
-          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.201/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.104/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

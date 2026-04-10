@@ -1,0 +1,12 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/ServiceHealthAssistant/CopilotIndices/17.14.1601.40145
+/.vs/ServiceHealthAssistant/v17
+/.vs/ServiceHealthAssistant.slnx/FileContentIndex
+/.vs/ServiceHealthAssistant.slnx/v17
+/src/ServiceHealthAssistant/obj/Debug/net8.0
+/src/ServiceHealthAssistant/bin/Debug/net8.0/ServiceHealthAssistant.exe
+/src/ServiceHealthAssistant/bin/Debug/net8.0/ServiceHealthAssistant.dll
+/src/ServiceHealthAssistant/bin/Debug/net8.0/ServiceHealthAssistant.dll
