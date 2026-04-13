@@ -128,6 +128,7 @@ builder.Services
 
 builder.Services.AddSingleton<IKustoBrainIntentWriter, KustoBrainIntentWriter>();
 builder.Services.AddSingleton<IGenevaMonitorFetcher, GenevaMonitorFetcher>();
+builder.Services.AddSingleton<IShericaMonitorFetcher, ShericaMonitorFetcher>();
 builder.Services.AddSingleton<BrainIntentServiceEvaluator>();
 
 await builder.Build().RunAsync();

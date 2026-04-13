@@ -23,15 +23,18 @@ public sealed class BrainIntentPersistenceTools
 
     private readonly BrainIntentServiceEvaluator _evaluator;
     private readonly IGenevaMonitorFetcher _genevaFetcher;
+    private readonly IShericaMonitorFetcher _shericaFetcher;
     private readonly IKustoBrainIntentWriter _writer;
 
     public BrainIntentPersistenceTools(
         BrainIntentServiceEvaluator evaluator,
         IGenevaMonitorFetcher genevaFetcher,
+        IShericaMonitorFetcher shericaFetcher,
         IKustoBrainIntentWriter writer)
     {
         _evaluator = evaluator;
         _genevaFetcher = genevaFetcher;
+        _shericaFetcher = shericaFetcher;
         _writer = writer;
     }
 
@@ -45,6 +48,10 @@ public sealed class BrainIntentPersistenceTools
         "then persist one result row per monitor into the ADX table " +
         "SHMDatabase.MCP_BrainIntentEvaluation on " +
         "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net. " +
+        "When neither genevaAccountId nor monitorsJson is provided, monitors are fetched automatically " +
+        "from cluster('sherica-prod.uksouth.kusto.windows.net').database('Analytics') using " +
+        "GetIntegratedMonitorOutageCoverageDrillThrough(_StartTime=now(-365d),_EndTime=now()) " +
+        "filtered by serviceId. " +
         "When genevaAccountId is supplied the tool fetches all monitors automatically from " +
         "cluster('geneva.kusto.windows.net').database('genevahealthconfigs').MonitorConfigMetadata " +
         "(rows where Time_Fetched > ago(1h) and either monitor_name or MonitorGuid is non-empty). " +
@@ -105,6 +112,24 @@ public sealed class BrainIntentPersistenceTools
                 }, JsonOptions);
             }
         }
+        else if (monitorsJsonEmpty)
+        {
+            // No monitorsJson and no genevaAccountId – auto-fetch from sherica-prod Analytics cluster
+            // using GetIntegratedMonitorOutageCoverageDrillThrough filtered by serviceId.
+            try
+            {
+                monitors = await _shericaFetcher.FetchMonitorsForServiceAsync(serviceId, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"Failed to fetch monitors from sherica-prod for service '{serviceId}': {ex.Message}",
+                    serviceId,
+                    serviceName
+                }, JsonOptions);
+            }
+        }
         else
         {
             try
@@ -128,9 +153,11 @@ public sealed class BrainIntentPersistenceTools
                 serviceName,
                 genevaAccountId = string.IsNullOrWhiteSpace(genevaAccountId) ? null : genevaAccountId,
                 evaluatedCount = 0,
-                message = string.IsNullOrWhiteSpace(genevaAccountId)
-                    ? "No monitors provided. Pass at least one monitor in monitorsJson."
-                    : $"No monitors found for Geneva account '{genevaAccountId}'."
+                message = !string.IsNullOrWhiteSpace(genevaAccountId)
+                    ? $"No monitors found for Geneva account '{genevaAccountId}'."
+                    : monitorsJsonEmpty
+                        ? $"No monitors found for service '{serviceId}' in GetIntegratedMonitorOutageCoverageDrillThrough."
+                        : "No monitors provided. Pass at least one monitor in monitorsJson."
             }, JsonOptions);
         }
 
