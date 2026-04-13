@@ -98,7 +98,7 @@ public sealed class BrainIntentServiceEvaluator
     }
 
     /// <summary>
-    /// Normalise a single monitor evaluation result into an ADX row.
+    /// Normalize a single monitor evaluation result into an ADX row.
     /// Exposed internally so unit tests can verify the mapping logic.
     /// </summary>
     internal static BrainIntentEvaluationRow Evaluate(
