@@ -14,7 +14,7 @@ namespace ServiceHealthAssistant.Adx;
 ///   cluster('geneva.kusto.windows.net')
 ///     .database('genevahealthconfigs')
 ///     .MonitorConfigMetadata
-///   | where Time_Fetched &gt; ago(1h)
+///   | where Time_Fetched > ago(1h)
 ///   | where isnotempty(monitor_name) or isnotempty(MonitorGuid)
 ///
 /// Auth: DefaultAzureCredential (Managed Identity → developer credential chain).
@@ -92,7 +92,7 @@ public sealed class GenevaMonitorFetcher : IGenevaMonitorFetcher, IDisposable
 
                 var monitorName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
                 var monitorGuid = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-                var monType     = reader.IsDBNull(3) ? null         : (string?)reader.GetString(3);
+                var monType     = reader.IsDBNull(3) ? null : (string?)reader.GetString(3);
 
                 // Use GUID as ID when name is absent; skip rows with neither.
                 var id = !string.IsNullOrWhiteSpace(monitorName) ? monitorName
