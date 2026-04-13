@@ -17,6 +17,8 @@ The Service Health Assistant operationalises reliability best practices through 
 | **Coverage & Gap Analysis** | Detects missing CUJO coverage, quality gaps, automation readiness gaps |
 | **Repairs & S360 KPI Actions** | Translates gaps into repair items mapped to S360 KPI categories |
 | **Automation Readiness** | Evaluates Brain/AOD eligibility with strict safety gates |
+| **Brain Intent Evaluation** | Per-capability Brain Intent classification for Geneva Service Monitors |
+| **ADX Persistence** | Ingests Brain Intent evaluation results to ADX via queued ingestion |
 | **Service Health Summary** | Produces a scored health overview with top priorities |
 
 ---
@@ -24,28 +26,43 @@ The Service Health Assistant operationalises reliability best practices through 
 ## Project Structure
 
 ```
-ServiceHealthAssistant.sln
+ServiceHealthAssistant.slnx
 src/
   ServiceHealthAssistant/
     Models/
-      Enums.cs          # SignalType, BrainIntentCategory, ComplianceStatus, …
-      Domain.cs         # Sli, ServiceMonitor, CoverageGap, RepairItem, S360KpiAction
-      Requests.cs       # SignalClassificationRequest, PreFlightValidationRequest
-      Results.cs        # All result record types
+      Enums.cs                    # SignalType, BrainIntentCategory, BrainIntentStatus,
+                                  #   DetectedImpactType, HistoricalPrecision, SignalStability, …
+      Domain.cs                   # Sli, ServiceMonitor, CoverageGap, RepairItem, S360KpiAction
+      Requests.cs                 # SignalClassificationRequest, MonitorBrainIntegrationRequest, …
+      Results.cs                  # All result record types
+      BrainIntentEvaluationRow.cs # ADX row schema for MCP_BrainIntentEvaluation
     Rules/
-      ServiceHealthRules.cs   # Deterministic rule engine (all governance logic)
+      ServiceHealthRules.cs       # Deterministic rule engine (all governance logic)
+    Adx/
+      IGenevaMonitorFetcher.cs    # Interface: fetch monitors from Geneva MonitorConfigMetadata
+      GenevaMonitorFetcher.cs     # Kusto client → cluster('geneva.kusto.windows.net')
+      IShericaMonitorFetcher.cs   # Interface: fetch monitors via GetIntegratedMonitorOutageCoverageDrillThrough
+      ShericaMonitorFetcher.cs    # Kusto client → cluster('sherica-prod.uksouth.kusto.windows.net')
+      IKustoBrainIntentWriter.cs  # Interface: ingest evaluation rows to ADX
+      KustoBrainIntentWriter.cs   # Queued ADX ingestion → shm-dev-uksouth-kusto / SHMDatabase
+    Evaluators/
+      BrainIntentServiceEvaluator.cs  # Orchestrates parallel per-monitor evaluation
     Tools/
-      ServiceHealthTools.cs   # MCP tool handlers (11 tools)
-    Program.cs          # MCP server entry point (stdio transport)
+      ServiceHealthTools.cs           # MCP tool handlers (12 tools)
+      BrainIntentPersistenceTools.cs  # MCP tool handlers (3 tools: evaluation + persistence)
+    Program.cs                    # MCP server entry point (stdio transport)
 tests/
   ServiceHealthAssistant.Tests/
     RulesTests/
-      AllRulesTests.cs  # 32 xUnit tests covering all rule engine functions
+      AllRulesTests.cs            # 32 xUnit tests covering the rule engine
+    BrainIntentTests/
+      BrainIntentPersistenceTests.cs  # 28 tests: field normalisation + batching logic
+      ShericaAutoFetchTests.cs        # 6 tests: auto-fetch from sherica-prod Analytics cluster
 ```
 
 ---
 
-## Tools Exposed via MCP (11 total)
+## Tools Exposed via MCP (15 total)
 
 ### `classify_signal`
 Determines whether a signal should be an **SLI** or a **Service Monitor** and classifies its **Brain Intent**.
@@ -134,9 +151,105 @@ Produces a **scored health overview** for a service with top priorities.
 
 ---
 
+### `get_sliq_quality_score`
+Returns a **KQL query** targeting the SLIQ data source for the agent to execute via a connected Kusto MCP tool. Gated to **SLI signals only** — returns an error immediately for `ServiceMonitor` or `Unknown` signal types.
+
+**Parameters:** `sliId`, `signalType`
+**Returns:** `datasource`, `kqlQuery` (ready to execute), `instructions`
+
+**Data source:**
+```
+cluster("sherica-prod.uksouth.kusto.windows.net").database('sherica-prod').SLIQualityScore
+```
+
+---
+
+### `evaluate_monitor_brain_integration`
+Classifies a Geneva Service Monitor's Brain integration eligibility across **four capabilities** independently.
+
+**Parameters:** `monitorName`, `monitorType`, `linkedCujoJourney`, `outageDrivingIcmMapping`, `detectedImpactType`, `lidPresence`, `regionalScopeDetectable`, `subscriptionScopeDetectable`, `historicalPrecision`, `signalStability`, `usedInOutageDeclarationPreviously`, `communicationRelevantImpact`
+
+**Returns:**
+
+```json
+{
+  "MonitorName": "MyMonitor",
+  "BrainIntent": {
+    "BrainAwareness":     "Enabled | ShouldBeEnabled | WillNotBeEnabled | NotClassified",
+    "OutageDeclaration":  "Enabled | ShouldBeEnabled | WillNotBeEnabled | NotClassified",
+    "DeploymentStops":    "Enabled | ShouldBeEnabled | WillNotBeEnabled | NotClassified",
+    "AutoComms":          "Enabled | ShouldBeEnabled | WillNotBeEnabled | NotClassified"
+  }
+}
+```
+
+**Capability gates:**
+
+| Capability | Enabled when | WillNotBeEnabled when |
+|---|---|---|
+| BrainAwareness | CustomerImpact + ICM mapping + CUJO journey | Platform or Operational impact |
+| OutageDeclaration | LID present + regional scope + Stable + High precision | No regional scope |
+| DeploymentStops | Deployment impact + subscription scope | Non-deployment impact |
+| AutoComms | CommRelevant + Stable + High precision | Platform or Operational impact |
+
+---
+
+### `evaluate_service_brain_intent_and_persist`
+Runs `evaluate_monitor_brain_integration` across **every monitor for a service** (bounded parallelism, default 8) and **persists one row per monitor** to ADX.
+
+**Parameters:** `serviceId`, `serviceName`, `monitorsJson`, `genevaAccountId`, `maxParallelism` (default 8), `batchSize` (default 200)
+
+**Monitor resolution priority (first match wins):**
+1. `genevaAccountId` supplied → auto-fetches from `cluster('geneva.kusto.windows.net').database('genevahealthconfigs').MonitorConfigMetadata` (rows within the last 1 hour)
+2. `monitorsJson` supplied → uses the provided JSON array directly
+3. Neither supplied → **auto-fetches from** `cluster('sherica-prod.uksouth.kusto.windows.net').database('Analytics')` using `GetIntegratedMonitorOutageCoverageDrillThrough(_StartTime=now(-365d), _EndTime=now())` filtered by `serviceId`
+
+**ADX persistence target:**
+```
+Cluster:  https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net
+Database: SHMDatabase
+Table:    MCP_BrainIntentEvaluation
+```
+
+**Latest-per-monitor query:**
+```kql
+MCP_BrainIntentEvaluation
+| summarize arg_max(EvaluationTimestamp, *) by ServiceId, MonitorId
+```
+
+---
+
+### `ingest_brain_intent_evaluation_rows`
+Directly ingests **pre-formed** `BrainIntentEvaluationRow` objects into ADX. Use when evaluation results are already available (e.g. from an external pipeline or a prior run) and only persistence is needed.
+
+**Parameters:** `rowsJson` (JSON array of evaluation rows), `batchSize` (default 200)
+
+**Required fields per row:** `ServiceId`, `MonitorId`, `MonitorName`, `BrainAwareness`, `OutageDeclaration`, `DeploymentStops`, `AutoComms`, `EvaluationSource`, `EvaluationTimestamp`
+
+**ADX persistence target:** same as `evaluate_service_brain_intent_and_persist`
+
+---
+
+## Data-Source Invocation Policy
+
+The server embeds `ServerInstructions` (sent to clients at MCP handshake) mandating that the agent retrieves runtime data **before** any validation or recommendation. The five mandatory gates are:
+
+| Gate | Data source | Triggers |
+|---|---|---|
+| **Geneva Monitor Metadata** | `cluster('sherica-prod.uksouth.kusto.windows.net').database('Analytics')` → `GetIntegratedMonitorOutageCoverageDrillThrough()` | BrainIntent presence, monitor classification, automation eligibility |
+| **SLIQ / Kusto Telemetry** | `cluster('sherica-prod.uksouth.kusto.windows.net').database('sherica-prod').SLIQualityScore` | LID readiness, SLI selectivity, detection quality (SLI signals only) |
+| **CUJO Hub** | `getCriticalSLIsFromCujoHub`, `getCUJOAnalysisPerService` | CUJO mapping, AOD onboarding, journey coverage |
+| **IcM / Brain Propagation** | `cluster('geneva.kusto.windows.net').database('genevahealthconfigs').MonitorConfigMetadata` | BrainIntent operational effectiveness |
+| **S360 KPI** | `generateS360SLIQualityKPIWrapper`, `generateS360AODKPIWrapper()` | KPI impact, repair generation, automation classification |
+
+If runtime data cannot be retrieved, the agent must return `"Validation Pending – Runtime Data Required"` and must **not** infer values from conversational context.
+
+---
+
 ## Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- **Azure identity** — the server uses `DefaultAzureCredential` (Managed Identity in production, developer credential chain locally) for all Kusto and ADX connections.
 
 ---
 
@@ -189,7 +302,13 @@ Or with a published binary:
 dotnet test
 ```
 
-32 xUnit tests covering all rule engine functions.
+**66 xUnit tests** across three test classes:
+
+| Test class | Tests | Coverage |
+|---|---|---|
+| `AllRulesTests` | 32 | All rule engine functions |
+| `BrainIntentPersistenceTests` | 28 | ADX row normalisation + batching logic |
+| `ShericaAutoFetchTests` | 6 | sherica-prod auto-fetch paths and error handling |
 
 ---
 
@@ -199,6 +318,8 @@ dotnet test
 - **Governance correctness over speed** — all checks must pass before automation is enabled.
 - **Auditability** — every recommendation includes `WhyRequired` and `OutcomeUnblocked`.
 - **Safety gates** — AOD/auto-comms are only enabled when ALL criteria are met.
+- **KQL injection prevention** — all Kusto query parameters are passed via `ClientRequestProperties.SetParameter` or validated against an allowlist before use.
+- **Shared ingestion path** — both `evaluate_service_brain_intent_and_persist` and `ingest_brain_intent_evaluation_rows` call the same `IKustoBrainIntentWriter.IngestBatchAsync` code path.
 
 ---
 
