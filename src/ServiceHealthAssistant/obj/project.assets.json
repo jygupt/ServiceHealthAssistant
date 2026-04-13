@@ -1976,7 +1976,7 @@
     ]
   },
   "packageFolders": {
-    "/tmp/codeql-scratch-a8b9226fdaa4b051/dbs/csharp/working/packages": {}
+    "/home/runner/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
@@ -1984,7 +1984,7 @@
       "projectUniqueName": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj",
       "projectName": "ServiceHealthAssistant",
       "projectPath": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj",
-      "packagesPath": "/tmp/codeql-scratch-a8b9226fdaa4b051/dbs/csharp/working/packages",
+      "packagesPath": "/home/runner/.nuget/packages/",
       "outputPath": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
@@ -2038,20 +2038,6 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[8.0.25, 8.0.25]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Host.linux-x64",
-            "version": "[8.0.25, 8.0.25]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Ref",
-            "version": "[8.0.25, 8.0.25]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
