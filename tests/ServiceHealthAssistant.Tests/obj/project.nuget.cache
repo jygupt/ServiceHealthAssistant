@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "ty7/cVp9ejk=",
+  "dgSpecHash": "dziLZpr6/b8=",
   "success": true,
-  "projectFilePath": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\tests\\ServiceHealthAssistant.Tests\\ServiceHealthAssistant.Tests.csproj",
+  "projectFilePath": "C:\\Users\\jygupt\\source\\repos\\ServiceHealthAssistant\\tests\\ServiceHealthAssistant.Tests\\ServiceHealthAssistant.Tests.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\jygupt\\.nuget\\packages\\coverlet.collector\\6.0.0\\coverlet.collector.6.0.0.nupkg.sha512",
     "C:\\Users\\jygupt\\.nuget\\packages\\microsoft.codecoverage\\18.4.0\\microsoft.codecoverage.18.4.0.nupkg.sha512",
