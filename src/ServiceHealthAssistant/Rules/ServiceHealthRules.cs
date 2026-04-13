@@ -608,6 +608,118 @@ public static class ServiceHealthRules
     }
 
     // -----------------------------------------------------------------------
+    // Monitor Brain Integration evaluation
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Evaluate a Geneva Service Monitor's suitability for Brain integration
+    /// independently across four automation capabilities:
+    /// BrainAwareness, OutageDeclaration, DeploymentStops, AutoComms.
+    ///
+    /// Each capability is assigned one of:
+    ///   Enabled, ShouldBeEnabled, WillNotBeEnabled, NotClassified.
+    /// </summary>
+    public static MonitorBrainIntegrationResult EvaluateMonitorBrainIntegration(
+        MonitorBrainIntegrationRequest req)
+    {
+        return new MonitorBrainIntegrationResult(
+            req.MonitorName,
+            new MonitorBrainIntentClassification(
+                BrainAwareness:    EvaluateBrainAwareness(req),
+                OutageDeclaration: EvaluateOutageDeclaration(req),
+                DeploymentStops:   EvaluateDeploymentStops(req),
+                AutoComms:         EvaluateAutoComms(req)));
+    }
+
+    // BrainAwareness:
+    //   Enabled          – customer-impacting conditions + ICM mapping + CUJO journey linked.
+    //   ShouldBeEnabled  – customer impact detected but missing ICM mapping or CUJO journey.
+    //   WillNotBeEnabled – internal/operational/platform conditions only.
+    //   NotClassified    – cannot be determined from provided metadata.
+    private static BrainIntentStatus EvaluateBrainAwareness(MonitorBrainIntegrationRequest req)
+    {
+        bool customerImpact = req.DetectedImpactType == DetectedImpactType.Customer;
+        bool hasCujoJourney = !string.IsNullOrEmpty(req.LinkedCujoJourney);
+
+        if (customerImpact && req.OutageDrivingIcmMapping && hasCujoJourney)
+            return BrainIntentStatus.Enabled;
+
+        if (customerImpact)
+            return BrainIntentStatus.ShouldBeEnabled;
+
+        if (req.DetectedImpactType == DetectedImpactType.Platform ||
+            req.DetectedImpactType == DetectedImpactType.Operational)
+            return BrainIntentStatus.WillNotBeEnabled;
+
+        return BrainIntentStatus.NotClassified;
+    }
+
+    // OutageDeclaration:
+    //   Enabled          – LID-compliant + regionally scoped + stable + high precision.
+    //   ShouldBeEnabled  – outage-relevant (ICM mapped or previously used) but missing LID or stability.
+    //   WillNotBeEnabled – regional scope not detectable.
+    //   NotClassified    – regional scope present but insufficient outage-relevance signals.
+    private static BrainIntentStatus EvaluateOutageDeclaration(MonitorBrainIntegrationRequest req)
+    {
+        if (!req.RegionalScopeDetectable)
+            return BrainIntentStatus.WillNotBeEnabled;
+
+        bool stableAndPrecise =
+            req.SignalStability == SignalStability.Stable &&
+            req.HistoricalPrecision == HistoricalPrecision.High;
+
+        if (req.LidPresence && stableAndPrecise)
+            return BrainIntentStatus.Enabled;
+
+        bool outageRelevant = req.OutageDrivingIcmMapping || req.UsedInOutageDeclarationPreviously;
+        if (outageRelevant)
+            return BrainIntentStatus.ShouldBeEnabled;
+
+        return BrainIntentStatus.NotClassified;
+    }
+
+    // DeploymentStops:
+    //   Enabled          – deployment-induced customer impact detected + subscription scope available.
+    //   ShouldBeEnabled  – deployment signal exists but subscription scope not available.
+    //   WillNotBeEnabled – monitor unrelated to deployment safety.
+    private static BrainIntentStatus EvaluateDeploymentStops(MonitorBrainIntegrationRequest req)
+    {
+        bool deploymentSignal = req.DetectedImpactType == DetectedImpactType.Deployment;
+
+        if (deploymentSignal && req.SubscriptionScopeDetectable)
+            return BrainIntentStatus.Enabled;
+
+        if (deploymentSignal)
+            return BrainIntentStatus.ShouldBeEnabled;
+
+        return BrainIntentStatus.WillNotBeEnabled;
+    }
+
+    // AutoComms:
+    //   Enabled          – communication-relevant customer impact + stable + high precision signal.
+    //   ShouldBeEnabled  – communication-relevant impact but not stable or not high precision.
+    //   WillNotBeEnabled – platform or operational impact only.
+    //   NotClassified    – communication relevance cannot be determined.
+    private static BrainIntentStatus EvaluateAutoComms(MonitorBrainIntegrationRequest req)
+    {
+        if (req.DetectedImpactType == DetectedImpactType.Platform ||
+            req.DetectedImpactType == DetectedImpactType.Operational)
+            return BrainIntentStatus.WillNotBeEnabled;
+
+        bool highPrecisionStable =
+            req.HistoricalPrecision == HistoricalPrecision.High &&
+            req.SignalStability == SignalStability.Stable;
+
+        if (req.CommunicationRelevantImpact && highPrecisionStable)
+            return BrainIntentStatus.Enabled;
+
+        if (req.CommunicationRelevantImpact)
+            return BrainIntentStatus.ShouldBeEnabled;
+
+        return BrainIntentStatus.NotClassified;
+    }
+
+    // -----------------------------------------------------------------------
     // SLI template generation
     // -----------------------------------------------------------------------
 

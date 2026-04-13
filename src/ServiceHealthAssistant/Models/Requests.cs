@@ -18,6 +18,21 @@ public sealed record SignalClassificationRequest(
     int ExistingSliCount = 0,
     bool BrainOutageModeRequired = false);
 
+/// <summary>Input for evaluating a Geneva Service Monitor's Brain integration capabilities.</summary>
+public sealed record MonitorBrainIntegrationRequest(
+    string MonitorName,
+    string? MonitorType = null,
+    string? LinkedCujoJourney = null,
+    bool OutageDrivingIcmMapping = false,
+    DetectedImpactType DetectedImpactType = DetectedImpactType.Operational,
+    bool LidPresence = false,
+    bool RegionalScopeDetectable = false,
+    bool SubscriptionScopeDetectable = false,
+    HistoricalPrecision HistoricalPrecision = HistoricalPrecision.Low,
+    SignalStability SignalStability = SignalStability.Unknown,
+    bool UsedInOutageDeclarationPreviously = false,
+    bool CommunicationRelevantImpact = false);
+
 /// <summary>Input for pre-publish validation.</summary>
 public sealed record PreFlightValidationRequest(
     string SignalId,

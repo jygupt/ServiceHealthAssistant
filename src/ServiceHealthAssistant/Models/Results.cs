@@ -69,6 +69,18 @@ public sealed record AutomationReadinessResult(
     IReadOnlyList<string> RemediationSteps,
     string Rationale);
 
+/// <summary>Brain intent classification across all four automation capabilities for a Geneva Service Monitor.</summary>
+public sealed record MonitorBrainIntentClassification(
+    BrainIntentStatus BrainAwareness,
+    BrainIntentStatus OutageDeclaration,
+    BrainIntentStatus DeploymentStops,
+    BrainIntentStatus AutoComms);
+
+/// <summary>Result of evaluating a Geneva Service Monitor's suitability for Brain integration.</summary>
+public sealed record MonitorBrainIntegrationResult(
+    string MonitorName,
+    MonitorBrainIntentClassification BrainIntent);
+
 /// <summary>Service health summary.</summary>
 public sealed record ServiceHealthSummary(
     string ServiceName,
