@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
+using ServiceHealthAssistant.Adx;
 using ServiceHealthAssistant.Evaluators;
 using ServiceHealthAssistant.Models;
 
@@ -21,10 +22,17 @@ public sealed class BrainIntentPersistenceTools
     };
 
     private readonly BrainIntentServiceEvaluator _evaluator;
+    private readonly IGenevaMonitorFetcher _genevaFetcher;
+    private readonly IKustoBrainIntentWriter _writer;
 
-    public BrainIntentPersistenceTools(BrainIntentServiceEvaluator evaluator)
+    public BrainIntentPersistenceTools(
+        BrainIntentServiceEvaluator evaluator,
+        IGenevaMonitorFetcher genevaFetcher,
+        IKustoBrainIntentWriter writer)
     {
         _evaluator = evaluator;
+        _genevaFetcher = genevaFetcher;
+        _writer = writer;
     }
 
     // -----------------------------------------------------------------------
@@ -37,7 +45,10 @@ public sealed class BrainIntentPersistenceTools
         "then persist one result row per monitor into the ADX table " +
         "SHMDatabase.MCP_BrainIntentEvaluation on " +
         "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net. " +
-        "Retrieve monitor metadata from Geneva before calling this tool. " +
+        "When genevaAccountId is supplied the tool fetches all monitors automatically from " +
+        "cluster('geneva.kusto.windows.net').database('genevahealthconfigs').MonitorConfigMetadata " +
+        "(rows where Time_Fetched > ago(1h) and either monitor_name or MonitorGuid is non-empty). " +
+        "Alternatively, pass monitor metadata explicitly in monitorsJson. " +
         "Each monitor in monitorsJson must include at minimum: Id, Name. " +
         "Optional fields mirror evaluate_monitor_brain_integration parameters.")]
     public async Task<string> EvaluateServiceBrainIntentAndPersist(
@@ -52,9 +63,15 @@ public sealed class BrainIntentPersistenceTools
             "HistoricalPrecision (High|Medium|Low), " +
             "SignalStability (Stable|Volatile|Unknown), " +
             "UsedInOutageDeclarationPreviously (bool), " +
-            "CommunicationRelevantImpact (bool), LinkedICMIncidentId (string)."
-        )] string monitorsJson,
+            "CommunicationRelevantImpact (bool), LinkedICMIncidentId (string). " +
+            "May be omitted or empty when genevaAccountId is provided."
+        )] string monitorsJson = "[]",
         [Description("Human-readable service name (optional).")] string serviceName = "",
+        [Description(
+            "Geneva account ID used to auto-fetch all monitors for this service from " +
+            "MonitorConfigMetadata (e.g. 'sherica'). " +
+            "When supplied and monitorsJson is empty, monitors are fetched automatically."
+        )] string genevaAccountId = "",
         [Description("Maximum concurrent monitor evaluations (default: 8).")] int maxParallelism = 8,
         [Description("Number of rows per ADX ingestion batch (default: 200).")] int batchSize = 200)
     {
@@ -67,16 +84,40 @@ public sealed class BrainIntentPersistenceTools
         }
 
         IReadOnlyList<MonitorEvaluationInput> monitors;
-        try
+
+        var monitorsJsonEmpty = string.IsNullOrWhiteSpace(monitorsJson) || monitorsJson.Trim() == "[]";
+
+        if (monitorsJsonEmpty && !string.IsNullOrWhiteSpace(genevaAccountId))
         {
-            monitors = ParseMonitorInputs(monitorsJson);
-        }
-        catch (Exception ex)
-        {
-            return JsonSerializer.Serialize(new
+            // Auto-fetch monitors from Geneva MonitorConfigMetadata.
+            try
             {
-                error = $"Failed to parse monitorsJson: {ex.Message}"
-            }, JsonOptions);
+                monitors = await _genevaFetcher.FetchMonitorsForAccountAsync(genevaAccountId);
+            }
+            catch (Exception ex)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"Failed to fetch monitors from Geneva for account '{genevaAccountId}': {ex.Message}",
+                    serviceId,
+                    serviceName,
+                    genevaAccountId
+                }, JsonOptions);
+            }
+        }
+        else
+        {
+            try
+            {
+                monitors = ParseMonitorInputs(monitorsJson);
+            }
+            catch (Exception ex)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"Failed to parse monitorsJson: {ex.Message}"
+                }, JsonOptions);
+            }
         }
 
         if (monitors.Count == 0)
@@ -85,18 +126,28 @@ public sealed class BrainIntentPersistenceTools
             {
                 serviceId,
                 serviceName,
+                genevaAccountId = string.IsNullOrWhiteSpace(genevaAccountId) ? null : genevaAccountId,
                 evaluatedCount = 0,
-                message = "No monitors provided. Pass at least one monitor in monitorsJson."
+                message = string.IsNullOrWhiteSpace(genevaAccountId)
+                    ? "No monitors provided. Pass at least one monitor in monitorsJson."
+                    : $"No monitors found for Geneva account '{genevaAccountId}'."
             }, JsonOptions);
         }
 
         try
         {
-            var rows = await _evaluator.EvaluateAndPersistAsync(
+            var rows = await _evaluator.EvaluateAsync(
                 serviceId, serviceName, monitors,
                 evaluationTimestamp: DateTime.UtcNow,
-                batchSize: batchSize,
                 maxParallelism: maxParallelism);
+
+            // Persist evaluated rows using the same ingestion path as
+            // ingest_brain_intent_evaluation_rows.
+            for (int i = 0; i < rows.Count; i += batchSize)
+            {
+                var batch = rows.Skip(i).Take(batchSize).ToList().AsReadOnly();
+                await _writer.IngestBatchAsync(batch);
+            }
 
             return JsonSerializer.Serialize(new
             {
@@ -105,6 +156,12 @@ public sealed class BrainIntentPersistenceTools
                 evaluatedCount = rows.Count,
                 evaluationTimestamp = rows[0].EvaluationTimestamp,
                 evaluationSource = rows[0].EvaluationSource,
+                ingestionTarget = new
+                {
+                    cluster  = "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net",
+                    database = "SHMDatabase",
+                    table    = "MCP_BrainIntentEvaluation"
+                },
                 summary = rows.Select(r => new
                 {
                     monitorId          = r.MonitorId,
@@ -128,8 +185,156 @@ public sealed class BrainIntentPersistenceTools
     }
 
     // -----------------------------------------------------------------------
+    // Tool: ingest_brain_intent_evaluation_rows
+    // -----------------------------------------------------------------------
+
+    [McpServerTool(Name = "ingest_brain_intent_evaluation_rows")]
+    [Description(
+        "Directly ingest pre-formed Brain Intent evaluation rows into the ADX table " +
+        "SHMDatabase.MCP_BrainIntentEvaluation on " +
+        "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net. " +
+        "Use this tool when evaluation results are already available (e.g., produced by " +
+        "evaluate_service_brain_intent_and_persist or an external pipeline) and only " +
+        "persistence is needed. Each row must include at minimum: " +
+        "ServiceId, MonitorId, MonitorName, BrainAwareness, OutageDeclaration, " +
+        "DeploymentStops, AutoComms, EvaluationSource, EvaluationTimestamp.")]
+    public async Task<string> IngestBrainIntentEvaluationRows(
+        [Description(
+            "JSON array of evaluation row objects. Required fields per row: " +
+            "ServiceId (string), ServiceName (string), MonitorId (string), " +
+            "MonitorName (string), MonitorType (string), IsSLI (bool), " +
+            "BrainAwareness (Enabled|ShouldBeEnabled|WillNotBeEnabled|NotClassified), " +
+            "OutageDeclaration (Enabled|ShouldBeEnabled|WillNotBeEnabled|NotClassified), " +
+            "DeploymentStops (Enabled|ShouldBeEnabled|WillNotBeEnabled|NotClassified), " +
+            "AutoComms (Enabled|ShouldBeEnabled|WillNotBeEnabled|NotClassified), " +
+            "EvaluationSource (string), EvaluationTimestamp (ISO-8601 UTC string). " +
+            "Optional fields: CujoJourney, LinkedICMIncidentId, LIDPresent (bool), " +
+            "RegionalScopeDetectable (bool), SubscriptionScopeDetectable (bool), " +
+            "HistoricalPrecision (High|Medium|Low), " +
+            "SignalStability (Stable|Volatile|Unknown), CommunicationRelevant (bool)."
+        )] string rowsJson,
+        [Description("Number of rows per ADX ingestion batch (default: 200).")] int batchSize = 200)
+    {
+        if (string.IsNullOrWhiteSpace(rowsJson) || rowsJson.Trim() == "[]")
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = "rowsJson is required and must contain at least one row."
+            }, JsonOptions);
+        }
+
+        IReadOnlyList<BrainIntentEvaluationRow> rows;
+        try
+        {
+            rows = ParseEvaluationRows(rowsJson);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = $"Failed to parse rowsJson: {ex.Message}"
+            }, JsonOptions);
+        }
+
+        if (rows.Count == 0)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = "No valid rows found in rowsJson."
+            }, JsonOptions);
+        }
+
+        try
+        {
+            for (int i = 0; i < rows.Count; i += batchSize)
+            {
+                var batch = rows.Skip(i).Take(batchSize).ToList().AsReadOnly();
+                await _writer.IngestBatchAsync(batch);
+            }
+
+            return JsonSerializer.Serialize(new
+            {
+                ingestedCount = rows.Count,
+                ingestionTarget = new
+                {
+                    cluster  = "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net",
+                    database = "SHMDatabase",
+                    table    = "MCP_BrainIntentEvaluation"
+                },
+                message = $"Successfully submitted {rows.Count} row(s) for ingestion."
+            }, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = $"Ingestion failed: {ex.Message}",
+                ingestedCount = 0
+            }, JsonOptions);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // JSON parsing helper
     // -----------------------------------------------------------------------
+
+    private static IReadOnlyList<BrainIntentEvaluationRow> ParseEvaluationRows(string json)
+    {
+        var raw = JsonSerializer.Deserialize<List<JsonElement>>(json) ?? [];
+        return raw.Select(e =>
+        {
+            string serviceId    = GetString(e, "ServiceId")    ?? "";
+            string serviceName  = GetString(e, "ServiceName")  ?? "";
+            string monitorId    = GetString(e, "MonitorId")    ?? "";
+            string monitorName  = GetString(e, "MonitorName")  ?? monitorId;
+            string monitorType  = GetString(e, "MonitorType")  ?? "";
+            bool   isSli        = GetBool(e, "IsSLI");
+
+            var brainAwareness    = GetEnum(e, "BrainAwareness",    BrainIntentStatus.NotClassified);
+            var outageDeclaration = GetEnum(e, "OutageDeclaration", BrainIntentStatus.NotClassified);
+            var deploymentStops   = GetEnum(e, "DeploymentStops",   BrainIntentStatus.NotClassified);
+            var autoComms         = GetEnum(e, "AutoComms",         BrainIntentStatus.NotClassified);
+
+            string evalSource = GetString(e, "EvaluationSource") ?? "MCP:ingest_brain_intent_evaluation_rows";
+            DateTime evalTimestamp = e.TryGetProperty("EvaluationTimestamp", out var tsProp)
+                && DateTime.TryParse(tsProp.GetString(), out var parsedTs)
+                    ? DateTime.SpecifyKind(parsedTs, DateTimeKind.Utc)
+                    : DateTime.UtcNow;
+
+            return new BrainIntentEvaluationRow(
+                ServiceId:                   serviceId,
+                ServiceName:                 serviceName,
+                MonitorId:                   monitorId,
+                MonitorName:                 monitorName,
+                MonitorType:                 monitorType,
+                IsSLI:                       isSli,
+                BrainAwareness:              brainAwareness,
+                OutageDeclaration:           outageDeclaration,
+                DeploymentStops:             deploymentStops,
+                AutoComms:                   autoComms,
+                EvaluationSource:            evalSource,
+                EvaluationTimestamp:         evalTimestamp,
+                CujoJourney:                 GetString(e, "CujoJourney"),
+                LinkedICMIncidentId:         GetString(e, "LinkedICMIncidentId"),
+                LIDPresent:                  GetNullableBool(e, "LIDPresent"),
+                RegionalScopeDetectable:     GetNullableBool(e, "RegionalScopeDetectable"),
+                SubscriptionScopeDetectable: GetNullableBool(e, "SubscriptionScopeDetectable"),
+                HistoricalPrecision:         GetNullableEnum<HistoricalPrecision>(e, "HistoricalPrecision"),
+                SignalStability:             GetNullableEnum<SignalStability>(e, "SignalStability"),
+                CommunicationRelevant:       GetNullableBool(e, "CommunicationRelevant"));
+        }).ToList().AsReadOnly();
+    }
+
+    private static bool? GetNullableBool(JsonElement e, string key) =>
+        e.TryGetProperty(key, out var p) && p.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? p.GetBoolean()
+            : null;
+
+    private static T? GetNullableEnum<T>(JsonElement e, string key) where T : struct, Enum =>
+        e.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String
+        && Enum.TryParse<T>(p.GetString(), ignoreCase: true, out var val)
+            ? val
+            : null;
 
     private static IReadOnlyList<MonitorEvaluationInput> ParseMonitorInputs(string json)
     {

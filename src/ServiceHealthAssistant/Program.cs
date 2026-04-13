@@ -127,6 +127,7 @@ builder.Services
     .WithTools<BrainIntentPersistenceTools>();
 
 builder.Services.AddSingleton<IKustoBrainIntentWriter, KustoBrainIntentWriter>();
+builder.Services.AddSingleton<IGenevaMonitorFetcher, GenevaMonitorFetcher>();
 builder.Services.AddSingleton<BrainIntentServiceEvaluator>();
 
 await builder.Build().RunAsync();
