@@ -2,6 +2,8 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using ServiceHealthAssistant.Adx;
+using ServiceHealthAssistant.Evaluators;
 using ServiceHealthAssistant.Tools;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -121,7 +123,11 @@ builder.Services
             """;
     })
     .WithStdioServerTransport()
-    .WithTools<ServiceHealthTools>();
+    .WithTools<ServiceHealthTools>()
+    .WithTools<BrainIntentPersistenceTools>();
+
+builder.Services.AddSingleton<IKustoBrainIntentWriter, KustoBrainIntentWriter>();
+builder.Services.AddSingleton<BrainIntentServiceEvaluator>();
 
 await builder.Build().RunAsync();
 
