@@ -50,9 +50,13 @@ builder.Services
             - SLI selectivity
             - Detection quality
             - Coverage status
+            And the signal type is SLI (not Service Monitor):
             Then:
+            Call get_sliq_quality_score to fetch SLIQ data for the SLI only if it exists in the data source.
             Query streaming SLI data in Kusto via SLIQ MCP tools.
             cluster("sherica-prod.uksouth.kusto.windows.net").database('sherica-prod').SLIQualityScore
+            Only fetch SLIQ data for SLI signal types. Do not fetch SLIQ data for Service Monitors.
+            Do not assume metadata values from prompt text.
 
             3. CUJO Hub (Coverage & Intent Source)
             If validation requires:

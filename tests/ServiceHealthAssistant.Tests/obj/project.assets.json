@@ -2998,39 +2998,32 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\jygupt\\.nuget\\packages\\": {},
-    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+    "/home/runner/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\tests\\ServiceHealthAssistant.Tests\\ServiceHealthAssistant.Tests.csproj",
+      "projectUniqueName": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/tests/ServiceHealthAssistant.Tests/ServiceHealthAssistant.Tests.csproj",
       "projectName": "ServiceHealthAssistant.Tests",
-      "projectPath": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\tests\\ServiceHealthAssistant.Tests\\ServiceHealthAssistant.Tests.csproj",
-      "packagesPath": "C:\\Users\\jygupt\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\tests\\ServiceHealthAssistant.Tests\\obj\\",
+      "projectPath": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/tests/ServiceHealthAssistant.Tests/ServiceHealthAssistant.Tests.csproj",
+      "packagesPath": "/home/runner/.nuget/packages/",
+      "outputPath": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/tests/ServiceHealthAssistant.Tests/obj/",
       "projectStyle": "PackageReference",
-      "fallbackFolders": [
-        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-      ],
       "configFilePaths": [
-        "C:\\Users\\jygupt\\AppData\\Roaming\\NuGet\\NuGet.Config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        "/home/runner/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
       ],
       "sources": {
-        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\src\\ServiceHealthAssistant\\ServiceHealthAssistant.csproj": {
-              "projectPath": "C:\\Users\\jygupt\\Source\\Repos\\ServiceHealthAssistant\\src\\ServiceHealthAssistant\\ServiceHealthAssistant.csproj"
+            "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj": {
+              "projectPath": "/home/runner/work/ServiceHealthAssistant/ServiceHealthAssistant/src/ServiceHealthAssistant/ServiceHealthAssistant.csproj"
             }
           }
         }
@@ -3045,7 +3038,7 @@
         "auditLevel": "low",
         "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "10.0.100"
+      "SdkAnalysisLevel": "10.0.200"
     },
     "frameworks": {
       "net8.0": {
@@ -3084,7 +3077,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.104/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.201/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

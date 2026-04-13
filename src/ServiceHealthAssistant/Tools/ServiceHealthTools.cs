@@ -22,6 +22,8 @@ public sealed class ServiceHealthTools
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    private const string SliqDatasource = "cluster(\"sherica-prod.uksouth.kusto.windows.net\").database('sherica-prod').SLIQualityScore";
+
     // -----------------------------------------------------------------------
     // Tool: classify_signal
     // -----------------------------------------------------------------------
@@ -236,6 +238,49 @@ public sealed class ServiceHealthTools
             serviceName, cujoId, metricNamespace, metricName,
             signalType, brainIntent, dimList, suggestedThreshold, windowMinutes);
         return JsonSerializer.Serialize(template, JsonOptions);
+    }
+
+    // -----------------------------------------------------------------------
+    // Tool: get_sliq_quality_score
+    // -----------------------------------------------------------------------
+
+    [McpServerTool(Name = "get_sliq_quality_score")]
+    [Description("Fetch SLIQ (SLI Quality) score data from the Kusto streaming data source for a given SLI. Only applicable for SLI signal type — returns an error for Service Monitors. Returns the KQL query to execute against the SLIQ Kusto table. Do not assume metadata values; always retrieve from the data source.")]
+    public static string GetSliqQualityScore(
+        [Description("SLI identifier to fetch quality score for.")] string sliId,
+        [Description("Signal type. Must be SLI — SLIQ data is only available for SLI signals, not Service Monitors.")] SignalType signalType)
+    {
+        if (string.IsNullOrWhiteSpace(sliId))
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = "SLI identifier is required to fetch SLIQ quality score.",
+                sliId
+            }, JsonOptions);
+        }
+
+        if (signalType != SignalType.SLI)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = "SLIQ quality score data is only available for SLI signals. Service Monitors are not tracked in the SLIQ data source.",
+                signalType = signalType.ToString(),
+                sliId
+            }, JsonOptions);
+        }
+
+        // Escape any embedded double quotes in sliId to prevent KQL injection
+        var safeSliId = sliId.Replace("\"", "\\\"");
+        var kqlQuery = $"{SliqDatasource}\n| where SliId == \"{safeSliId}\"\n| order by Timestamp desc\n| take 1";
+
+        return JsonSerializer.Serialize(new
+        {
+            sliId,
+            signalType = signalType.ToString(),
+            datasource = SliqDatasource,
+            kqlQuery,
+            instructions = "Execute this KQL query against the SLIQ Kusto data source using streaming ingestion. Use the returned quality score values directly — do not assume or infer metadata values from context."
+        }, JsonOptions);
     }
 
     // -----------------------------------------------------------------------
