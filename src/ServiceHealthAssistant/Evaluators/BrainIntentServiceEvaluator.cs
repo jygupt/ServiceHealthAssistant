@@ -43,6 +43,49 @@ public sealed class BrainIntentServiceEvaluator
     }
 
     /// <summary>
+    /// Evaluate all monitors for a service without persisting results.
+    /// </summary>
+    /// <param name="serviceId">Stable service identifier.</param>
+    /// <param name="serviceName">Human-readable service name (may be empty).</param>
+    /// <param name="monitors">Monitor descriptors fetched from Geneva or provided by the caller.</param>
+    /// <param name="evaluationTimestamp">
+    ///   Stable UTC timestamp for the whole evaluation run (idempotency anchor).
+    ///   Defaults to <see cref="DateTime.UtcNow"/> when not provided.
+    /// </param>
+    /// <param name="maxParallelism">Maximum concurrent evaluations.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>All evaluated rows.</returns>
+    public async Task<IReadOnlyList<BrainIntentEvaluationRow>> EvaluateAsync(
+        string serviceId,
+        string serviceName,
+        IReadOnlyList<MonitorEvaluationInput> monitors,
+        DateTime? evaluationTimestamp = null,
+        int maxParallelism = DefaultMaxParallelism,
+        CancellationToken cancellationToken = default)
+    {
+        var timestamp = evaluationTimestamp ?? DateTime.UtcNow;
+        var results = new BrainIntentEvaluationRow[monitors.Count];
+
+        using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
+
+        var tasks = monitors.Select((monitor, index) => Task.Run(async () =>
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                results[index] = Evaluate(serviceId, serviceName, monitor, timestamp);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }, cancellationToken));
+
+        await Task.WhenAll(tasks);
+        return results.AsReadOnly();
+    }
+
+    /// <summary>
     /// Evaluate all monitors for a service and persist the rows to ADX.
     /// </summary>
     /// <param name="serviceId">Stable service identifier.</param>

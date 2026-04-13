@@ -136,11 +136,18 @@ public sealed class BrainIntentPersistenceTools
 
         try
         {
-            var rows = await _evaluator.EvaluateAndPersistAsync(
+            var rows = await _evaluator.EvaluateAsync(
                 serviceId, serviceName, monitors,
                 evaluationTimestamp: DateTime.UtcNow,
-                batchSize: batchSize,
                 maxParallelism: maxParallelism);
+
+            // Persist evaluated rows using the same ingestion path as
+            // ingest_brain_intent_evaluation_rows.
+            for (int i = 0; i < rows.Count; i += batchSize)
+            {
+                var batch = rows.Skip(i).Take(batchSize).ToList().AsReadOnly();
+                await _writer.IngestBatchAsync(batch);
+            }
 
             return JsonSerializer.Serialize(new
             {
@@ -149,6 +156,12 @@ public sealed class BrainIntentPersistenceTools
                 evaluatedCount = rows.Count,
                 evaluationTimestamp = rows[0].EvaluationTimestamp,
                 evaluationSource = rows[0].EvaluationSource,
+                ingestionTarget = new
+                {
+                    cluster  = "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net",
+                    database = "SHMDatabase",
+                    table    = "MCP_BrainIntentEvaluation"
+                },
                 summary = rows.Select(r => new
                 {
                     monitorId          = r.MonitorId,
