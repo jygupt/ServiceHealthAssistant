@@ -510,3 +510,245 @@ public class SliTemplateTests
         Assert.Empty(lidAdded);
     }
 }
+
+// ---------------------------------------------------------------------------
+// EvaluateMonitorBrainIntegration
+// ---------------------------------------------------------------------------
+
+public class MonitorBrainIntegrationTests
+{
+    private static MonitorBrainIntegrationRequest BaseRequest(
+        DetectedImpactType impactType = DetectedImpactType.Operational,
+        bool outageDrivingIcmMapping = false,
+        string? linkedCujoJourney = null,
+        bool lidPresence = false,
+        bool regionalScope = false,
+        bool subscriptionScope = false,
+        HistoricalPrecision precision = HistoricalPrecision.Low,
+        SignalStability stability = SignalStability.Unknown,
+        bool usedInOutageDeclaration = false,
+        bool commRelevantImpact = false) =>
+        new MonitorBrainIntegrationRequest(
+            "TestMonitor",
+            MonitorType: "MdmMetricMonitor",
+            LinkedCujoJourney: linkedCujoJourney,
+            OutageDrivingIcmMapping: outageDrivingIcmMapping,
+            DetectedImpactType: impactType,
+            LidPresence: lidPresence,
+            RegionalScopeDetectable: regionalScope,
+            SubscriptionScopeDetectable: subscriptionScope,
+            HistoricalPrecision: precision,
+            SignalStability: stability,
+            UsedInOutageDeclarationPreviously: usedInOutageDeclaration,
+            CommunicationRelevantImpact: commRelevantImpact);
+
+    // --- BrainAwareness ---
+
+    [Fact]
+    public void BrainAwareness_AllCriteriaMet_IsEnabled()
+    {
+        var req = BaseRequest(
+            impactType: DetectedImpactType.Customer,
+            outageDrivingIcmMapping: true,
+            linkedCujoJourney: "CUJO-001");
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.Enabled, result.BrainIntent.BrainAwareness);
+    }
+
+    [Fact]
+    public void BrainAwareness_CustomerImpact_NoMapping_IsShouldBeEnabled()
+    {
+        var req = BaseRequest(impactType: DetectedImpactType.Customer);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.ShouldBeEnabled, result.BrainIntent.BrainAwareness);
+    }
+
+    [Fact]
+    public void BrainAwareness_OperationalOnly_IsWillNotBeEnabled()
+    {
+        var req = BaseRequest(impactType: DetectedImpactType.Operational);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.WillNotBeEnabled, result.BrainIntent.BrainAwareness);
+    }
+
+    [Fact]
+    public void BrainAwareness_PlatformOnly_IsWillNotBeEnabled()
+    {
+        var req = BaseRequest(impactType: DetectedImpactType.Platform);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.WillNotBeEnabled, result.BrainIntent.BrainAwareness);
+    }
+
+    [Fact]
+    public void BrainAwareness_DeploymentImpact_IsNotClassified()
+    {
+        var req = BaseRequest(impactType: DetectedImpactType.Deployment);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.NotClassified, result.BrainIntent.BrainAwareness);
+    }
+
+    // --- OutageDeclaration ---
+
+    [Fact]
+    public void OutageDeclaration_AllCriteriaMet_IsEnabled()
+    {
+        var req = BaseRequest(
+            lidPresence: true,
+            regionalScope: true,
+            stability: SignalStability.Stable,
+            precision: HistoricalPrecision.High);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.Enabled, result.BrainIntent.OutageDeclaration);
+    }
+
+    [Fact]
+    public void OutageDeclaration_NoRegionalScope_IsWillNotBeEnabled()
+    {
+        var req = BaseRequest(lidPresence: true, regionalScope: false);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.WillNotBeEnabled, result.BrainIntent.OutageDeclaration);
+    }
+
+    [Fact]
+    public void OutageDeclaration_OutageRelevant_MissingLid_IsShouldBeEnabled()
+    {
+        var req = BaseRequest(
+            regionalScope: true,
+            lidPresence: false,
+            outageDrivingIcmMapping: true);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.ShouldBeEnabled, result.BrainIntent.OutageDeclaration);
+    }
+
+    [Fact]
+    public void OutageDeclaration_UsedPreviously_MissingStability_IsShouldBeEnabled()
+    {
+        var req = BaseRequest(
+            regionalScope: true,
+            lidPresence: true,
+            stability: SignalStability.Volatile,
+            usedInOutageDeclaration: true);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.ShouldBeEnabled, result.BrainIntent.OutageDeclaration);
+    }
+
+    // --- DeploymentStops ---
+
+    [Fact]
+    public void DeploymentStops_DeploymentImpact_WithSubscriptionScope_IsEnabled()
+    {
+        var req = BaseRequest(
+            impactType: DetectedImpactType.Deployment,
+            subscriptionScope: true);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.Enabled, result.BrainIntent.DeploymentStops);
+    }
+
+    [Fact]
+    public void DeploymentStops_DeploymentImpact_NoSubscriptionScope_IsShouldBeEnabled()
+    {
+        var req = BaseRequest(
+            impactType: DetectedImpactType.Deployment,
+            subscriptionScope: false);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.ShouldBeEnabled, result.BrainIntent.DeploymentStops);
+    }
+
+    [Fact]
+    public void DeploymentStops_CustomerImpact_IsWillNotBeEnabled()
+    {
+        var req = BaseRequest(impactType: DetectedImpactType.Customer);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.WillNotBeEnabled, result.BrainIntent.DeploymentStops);
+    }
+
+    // --- AutoComms ---
+
+    [Fact]
+    public void AutoComms_CommRelevant_HighPrecision_Stable_IsEnabled()
+    {
+        var req = BaseRequest(
+            impactType: DetectedImpactType.Customer,
+            precision: HistoricalPrecision.High,
+            stability: SignalStability.Stable,
+            commRelevantImpact: true);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.Enabled, result.BrainIntent.AutoComms);
+    }
+
+    [Fact]
+    public void AutoComms_CommRelevant_Volatile_IsShouldBeEnabled()
+    {
+        var req = BaseRequest(
+            impactType: DetectedImpactType.Customer,
+            precision: HistoricalPrecision.High,
+            stability: SignalStability.Volatile,
+            commRelevantImpact: true);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.ShouldBeEnabled, result.BrainIntent.AutoComms);
+    }
+
+    [Fact]
+    public void AutoComms_PlatformImpact_IsWillNotBeEnabled()
+    {
+        var req = BaseRequest(
+            impactType: DetectedImpactType.Platform,
+            commRelevantImpact: true);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.WillNotBeEnabled, result.BrainIntent.AutoComms);
+    }
+
+    [Fact]
+    public void AutoComms_CustomerImpact_NotCommRelevant_IsNotClassified()
+    {
+        var req = BaseRequest(
+            impactType: DetectedImpactType.Customer,
+            commRelevantImpact: false);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal(BrainIntentStatus.NotClassified, result.BrainIntent.AutoComms);
+    }
+
+    // --- Output shape ---
+
+    [Fact]
+    public void Result_MonitorNameIsPreserved()
+    {
+        var req = new MonitorBrainIntegrationRequest("MyMonitor-001");
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+
+        Assert.Equal("MyMonitor-001", result.MonitorName);
+    }
+}

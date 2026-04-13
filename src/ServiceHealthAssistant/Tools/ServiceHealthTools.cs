@@ -241,6 +241,37 @@ public sealed class ServiceHealthTools
     }
 
     // -----------------------------------------------------------------------
+    // Tool: evaluate_monitor_brain_integration
+    // -----------------------------------------------------------------------
+
+    [McpServerTool(Name = "evaluate_monitor_brain_integration")]
+    [Description("Evaluate whether a Geneva Service Monitor should be integrated with Brain for automation capabilities. Assesses suitability independently across BrainAwareness, OutageDeclaration, DeploymentStops, and AutoComms. Returns a classification (Enabled, ShouldBeEnabled, WillNotBeEnabled, NotClassified) for each capability. Retrieve monitor metadata from Geneva-connected MCP tools before calling this tool — do not assume metadata values from prompt text.")]
+    public static string EvaluateMonitorBrainIntegration(
+        [Description("Geneva Service Monitor name.")] string monitorName,
+        [Description("Monitor type (e.g., MdmMetricMonitor, KqlMonitor).")] string? monitorType = null,
+        [Description("Linked CUJO journey ID (if available).")] string? linkedCujoJourney = null,
+        [Description("True if the monitor is mapped to an outage-driving ICM.")] bool outageDrivingIcmMapping = false,
+        [Description("Primary impact type detected by the monitor: Customer, Platform, Deployment, or Operational.")] DetectedImpactType detectedImpactType = DetectedImpactType.Operational,
+        [Description("True if the monitor has LID (Latency, Impact, Dependency) dimensions present.")] bool lidPresence = false,
+        [Description("True if the monitor can detect regionally scoped impact.")] bool regionalScopeDetectable = false,
+        [Description("True if the monitor can detect subscription-scoped impact.")] bool subscriptionScopeDetectable = false,
+        [Description("Historical precision of the monitor signal: High, Medium, or Low.")] HistoricalPrecision historicalPrecision = HistoricalPrecision.Low,
+        [Description("Signal stability of the monitor: Stable, Volatile, or Unknown.")] SignalStability signalStability = SignalStability.Unknown,
+        [Description("True if the monitor has been used in outage declaration previously.")] bool usedInOutageDeclarationPreviously = false,
+        [Description("True if the monitor detects communication-relevant customer impact.")] bool communicationRelevantImpact = false)
+    {
+        var req = new MonitorBrainIntegrationRequest(
+            monitorName, monitorType, linkedCujoJourney,
+            outageDrivingIcmMapping, detectedImpactType,
+            lidPresence, regionalScopeDetectable, subscriptionScopeDetectable,
+            historicalPrecision, signalStability,
+            usedInOutageDeclarationPreviously, communicationRelevantImpact);
+
+        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
+        return JsonSerializer.Serialize(result, JsonOptions);
+    }
+
+    // -----------------------------------------------------------------------
     // Tool: get_sliq_quality_score
     // -----------------------------------------------------------------------
 
