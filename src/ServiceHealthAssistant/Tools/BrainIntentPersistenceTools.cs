@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
+using ServiceHealthAssistant.Adx;
 using ServiceHealthAssistant.Evaluators;
 using ServiceHealthAssistant.Models;
 
@@ -21,10 +22,14 @@ public sealed class BrainIntentPersistenceTools
     };
 
     private readonly BrainIntentServiceEvaluator _evaluator;
+    private readonly IGenevaMonitorFetcher _genevaFetcher;
 
-    public BrainIntentPersistenceTools(BrainIntentServiceEvaluator evaluator)
+    public BrainIntentPersistenceTools(
+        BrainIntentServiceEvaluator evaluator,
+        IGenevaMonitorFetcher genevaFetcher)
     {
         _evaluator = evaluator;
+        _genevaFetcher = genevaFetcher;
     }
 
     // -----------------------------------------------------------------------
@@ -37,7 +42,10 @@ public sealed class BrainIntentPersistenceTools
         "then persist one result row per monitor into the ADX table " +
         "SHMDatabase.MCP_BrainIntentEvaluation on " +
         "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net. " +
-        "Retrieve monitor metadata from Geneva before calling this tool. " +
+        "When genevaAccountId is supplied the tool fetches all monitors automatically from " +
+        "cluster('geneva.kusto.windows.net').database('genevahealthconfigs').MonitorConfigMetadata " +
+        "(rows where Time_Fetched > ago(1h) and either monitor_name or MonitorGuid is non-empty). " +
+        "Alternatively, pass monitor metadata explicitly in monitorsJson. " +
         "Each monitor in monitorsJson must include at minimum: Id, Name. " +
         "Optional fields mirror evaluate_monitor_brain_integration parameters.")]
     public async Task<string> EvaluateServiceBrainIntentAndPersist(
@@ -52,9 +60,15 @@ public sealed class BrainIntentPersistenceTools
             "HistoricalPrecision (High|Medium|Low), " +
             "SignalStability (Stable|Volatile|Unknown), " +
             "UsedInOutageDeclarationPreviously (bool), " +
-            "CommunicationRelevantImpact (bool), LinkedICMIncidentId (string)."
-        )] string monitorsJson,
+            "CommunicationRelevantImpact (bool), LinkedICMIncidentId (string). " +
+            "May be omitted or empty when genevaAccountId is provided."
+        )] string monitorsJson = "[]",
         [Description("Human-readable service name (optional).")] string serviceName = "",
+        [Description(
+            "Geneva account ID used to auto-fetch all monitors for this service from " +
+            "MonitorConfigMetadata (e.g. 'sherica'). " +
+            "When supplied and monitorsJson is empty, monitors are fetched automatically."
+        )] string genevaAccountId = "",
         [Description("Maximum concurrent monitor evaluations (default: 8).")] int maxParallelism = 8,
         [Description("Number of rows per ADX ingestion batch (default: 200).")] int batchSize = 200)
     {
@@ -67,16 +81,40 @@ public sealed class BrainIntentPersistenceTools
         }
 
         IReadOnlyList<MonitorEvaluationInput> monitors;
-        try
+
+        var monitorsJsonEmpty = string.IsNullOrWhiteSpace(monitorsJson) || monitorsJson.Trim() == "[]";
+
+        if (monitorsJsonEmpty && !string.IsNullOrWhiteSpace(genevaAccountId))
         {
-            monitors = ParseMonitorInputs(monitorsJson);
-        }
-        catch (Exception ex)
-        {
-            return JsonSerializer.Serialize(new
+            // Auto-fetch monitors from Geneva MonitorConfigMetadata.
+            try
             {
-                error = $"Failed to parse monitorsJson: {ex.Message}"
-            }, JsonOptions);
+                monitors = await _genevaFetcher.FetchMonitorsForAccountAsync(genevaAccountId);
+            }
+            catch (Exception ex)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"Failed to fetch monitors from Geneva for account '{genevaAccountId}': {ex.Message}",
+                    serviceId,
+                    serviceName,
+                    genevaAccountId
+                }, JsonOptions);
+            }
+        }
+        else
+        {
+            try
+            {
+                monitors = ParseMonitorInputs(monitorsJson);
+            }
+            catch (Exception ex)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"Failed to parse monitorsJson: {ex.Message}"
+                }, JsonOptions);
+            }
         }
 
         if (monitors.Count == 0)
@@ -85,8 +123,11 @@ public sealed class BrainIntentPersistenceTools
             {
                 serviceId,
                 serviceName,
+                genevaAccountId = string.IsNullOrWhiteSpace(genevaAccountId) ? null : genevaAccountId,
                 evaluatedCount = 0,
-                message = "No monitors provided. Pass at least one monitor in monitorsJson."
+                message = string.IsNullOrWhiteSpace(genevaAccountId)
+                    ? "No monitors provided. Pass at least one monitor in monitorsJson."
+                    : $"No monitors found for Geneva account '{genevaAccountId}'."
             }, JsonOptions);
         }
 
