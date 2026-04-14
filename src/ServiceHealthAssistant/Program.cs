@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using ServiceHealthAssistant.Adx;
 using ServiceHealthAssistant.Evaluators;
+using ServiceHealthAssistant.Repair;
 using ServiceHealthAssistant.Tools;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -124,12 +125,19 @@ builder.Services
     })
     .WithStdioServerTransport()
     .WithTools<ServiceHealthTools>()
-    .WithTools<BrainIntentPersistenceTools>();
+    .WithTools<BrainIntentPersistenceTools>()
+    .WithTools<BrainCapabilityRepairTools>();
 
 builder.Services.AddSingleton<IKustoBrainIntentWriter, KustoBrainIntentWriter>();
 builder.Services.AddSingleton<IGenevaMonitorFetcher, GenevaMonitorFetcher>();
 builder.Services.AddSingleton<IShericaMonitorFetcher, ShericaMonitorFetcher>();
 builder.Services.AddSingleton<BrainIntentServiceEvaluator>();
+
+// Bulk repair agent services.
+builder.Services.AddSingleton<IGenevaMonitorMetadataClient, GenevaMonitorMetadataClient>();
+builder.Services.AddSingleton<IDashboardMonitorSetProvider, KustoDashboardMonitorSetProvider>();
+builder.Services.AddSingleton<IPropagationValidator, KustoPropagationValidator>();
+builder.Services.AddSingleton<BulkGenevaBrainCapabilityMetadataRepairAgent>();
 
 await builder.Build().RunAsync();
 
