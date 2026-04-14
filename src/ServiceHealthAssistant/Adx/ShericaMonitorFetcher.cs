@@ -45,17 +45,17 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<MonitorEvaluationInput>> FetchMonitorsForServiceAsync(
-        string serviceId,
+        string serviceOid,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(serviceId))
+        if (string.IsNullOrWhiteSpace(serviceOid))
             return [];
 
-        // Validate serviceId to prevent KQL injection: allow only alphanumeric, dash, underscore, dot.
-        if (!System.Text.RegularExpressions.Regex.IsMatch(serviceId, @"^[a-zA-Z0-9\-_.]+$"))
+        // Validate serviceOid to prevent KQL injection: allow only alphanumeric, dash, underscore, dot.
+        if (!System.Text.RegularExpressions.Regex.IsMatch(serviceOid, @"^[a-zA-Z0-9\-_.]+$"))
         {
             throw new ArgumentException(
-                $"serviceId '{serviceId}' contains invalid characters. " +
+                $"serviceOid '{serviceOid}' contains invalid characters. " +
                 "Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
         }
 
@@ -64,7 +64,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 _StartTime = now(-365d),
                 _EndTime   = now()
             )
-            | where ServiceId == _serviceId
+            | where ServiceOid == _serviceOid
             | summarize arg_max(Timestamp, *) by tostring(MonitorId), tostring(MonitorName)
             | project
                 MonitorId                    = tostring(MonitorId),
@@ -82,14 +82,14 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
             """;
 
         _logger.LogInformation(
-            "Fetching monitors for service '{ServiceId}' from {Cluster}/{Database} via GetIntegratedMonitorOutageCoverageDrillThrough.",
-            serviceId, ClusterUri, DatabaseName);
+            "Fetching monitors for service OID '{ServiceOid}' from {Cluster}/{Database} via GetIntegratedMonitorOutageCoverageDrillThrough.",
+            serviceOid, ClusterUri, DatabaseName);
 
         var props = new ClientRequestProperties
         {
             ClientRequestId = $"ServiceHealthAssistant;FetchShericaMonitors;{Guid.NewGuid()}"
         };
-        props.SetParameter("_serviceId", serviceId);
+        props.SetParameter("_serviceOid", serviceOid);
 
         var results = new List<MonitorEvaluationInput>();
 
@@ -146,8 +146,8 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
         }, cancellationToken);
 
         _logger.LogInformation(
-            "Retrieved {Count} monitor(s) for service '{ServiceId}' from GetIntegratedMonitorOutageCoverageDrillThrough.",
-            results.Count, serviceId);
+            "Retrieved {Count} monitor(s) for service OID '{ServiceOid}' from GetIntegratedMonitorOutageCoverageDrillThrough.",
+            results.Count, serviceOid);
 
         return results.AsReadOnly();
     }

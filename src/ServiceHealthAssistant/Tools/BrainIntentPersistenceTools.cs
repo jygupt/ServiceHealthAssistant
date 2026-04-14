@@ -23,18 +23,15 @@ public sealed class BrainIntentPersistenceTools
 
     private readonly BrainIntentServiceEvaluator _evaluator;
     private readonly IGenevaMonitorFetcher _genevaFetcher;
-    private readonly IShericaMonitorFetcher _shericaFetcher;
     private readonly IKustoBrainIntentWriter _writer;
 
     public BrainIntentPersistenceTools(
         BrainIntentServiceEvaluator evaluator,
         IGenevaMonitorFetcher genevaFetcher,
-        IShericaMonitorFetcher shericaFetcher,
         IKustoBrainIntentWriter writer)
     {
         _evaluator = evaluator;
         _genevaFetcher = genevaFetcher;
-        _shericaFetcher = shericaFetcher;
         _writer = writer;
     }
 
@@ -90,13 +87,81 @@ public sealed class BrainIntentPersistenceTools
             }, JsonOptions);
         }
 
-        IReadOnlyList<MonitorEvaluationInput> monitors;
-
         var monitorsJsonEmpty = string.IsNullOrWhiteSpace(monitorsJson) || monitorsJson.Trim() == "[]";
 
-        if (monitorsJsonEmpty && !string.IsNullOrWhiteSpace(genevaAccountId))
+        // ------------------------------------------------------------------
+        // Path A: no explicit monitors and no genevaAccountId
+        //   → EvaluateAndPersistAsync fetches ALL monitors for this service
+        //     from GetIntegratedMonitorOutageCoverageDrillThrough (by ServiceOid),
+        //     evaluates every returned monitor, and persists the results.
+        // ------------------------------------------------------------------
+        if (monitorsJsonEmpty && string.IsNullOrWhiteSpace(genevaAccountId))
         {
-            // Auto-fetch monitors from Geneva MonitorConfigMetadata.
+            try
+            {
+                var rows = await _evaluator.EvaluateAndPersistAsync(
+                    serviceOid: serviceId,
+                    serviceName: serviceName,
+                    evaluationTimestamp: DateTime.UtcNow,
+                    batchSize: batchSize,
+                    maxParallelism: maxParallelism,
+                    cancellationToken: CancellationToken.None);
+
+                if (rows.Count == 0)
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        serviceId,
+                        serviceName,
+                        evaluatedCount = 0,
+                        message = $"No monitors found for service '{serviceId}' in GetIntegratedMonitorOutageCoverageDrillThrough."
+                    }, JsonOptions);
+                }
+
+                return JsonSerializer.Serialize(new
+                {
+                    serviceId,
+                    serviceName,
+                    evaluatedCount = rows.Count,
+                    evaluationTimestamp = rows[0].EvaluationTimestamp,
+                    evaluationSource = rows[0].EvaluationSource,
+                    ingestionTarget = new
+                    {
+                        cluster  = "https://shm-dev-uksouth-kusto.uksouth.kusto.windows.net",
+                        database = "SHMDatabase",
+                        table    = "MCP_BrainIntentEvaluation"
+                    },
+                    summary = rows.Select(r => new
+                    {
+                        monitorId          = r.MonitorId,
+                        monitorName        = r.MonitorName,
+                        brainAwareness     = r.BrainAwareness.ToString(),
+                        outageDeclaration  = r.OutageDeclaration.ToString(),
+                        deploymentStops    = r.DeploymentStops.ToString(),
+                        autoComms          = r.AutoComms.ToString()
+                    }).ToList()
+                }, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"Evaluation or ingestion failed: {ex.Message}",
+                    serviceId,
+                    serviceName
+                }, JsonOptions);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Path B: genevaAccountId provided → fetch from Geneva MonitorConfigMetadata
+        // Path C: explicit monitorsJson provided
+        // Both paths evaluate with EvaluateAsync then persist manually.
+        // ------------------------------------------------------------------
+        IReadOnlyList<MonitorEvaluationInput> monitors;
+
+        if (!string.IsNullOrWhiteSpace(genevaAccountId))
+        {
             try
             {
                 monitors = await _genevaFetcher.FetchMonitorsForAccountAsync(genevaAccountId);
@@ -109,24 +174,6 @@ public sealed class BrainIntentPersistenceTools
                     serviceId,
                     serviceName,
                     genevaAccountId
-                }, JsonOptions);
-            }
-        }
-        else if (monitorsJsonEmpty)
-        {
-            // No monitorsJson and no genevaAccountId – auto-fetch from sherica-prod Analytics cluster
-            // using GetIntegratedMonitorOutageCoverageDrillThrough filtered by serviceId.
-            try
-            {
-                monitors = await _shericaFetcher.FetchMonitorsForServiceAsync(serviceId, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Failed to fetch monitors from sherica-prod for service '{serviceId}': {ex.Message}",
-                    serviceId,
-                    serviceName
                 }, JsonOptions);
             }
         }
@@ -155,9 +202,7 @@ public sealed class BrainIntentPersistenceTools
                 evaluatedCount = 0,
                 message = !string.IsNullOrWhiteSpace(genevaAccountId)
                     ? $"No monitors found for Geneva account '{genevaAccountId}'."
-                    : monitorsJsonEmpty
-                        ? $"No monitors found for service '{serviceId}' in GetIntegratedMonitorOutageCoverageDrillThrough."
-                        : "No monitors provided. Pass at least one monitor in monitorsJson."
+                    : "No monitors provided. Pass at least one monitor in monitorsJson."
             }, JsonOptions);
         }
 

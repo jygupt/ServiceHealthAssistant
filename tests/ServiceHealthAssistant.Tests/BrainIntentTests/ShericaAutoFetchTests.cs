@@ -11,15 +11,16 @@ namespace ServiceHealthAssistant.Tests.BrainIntentTests;
 /// <summary>
 /// Tests that verify the sherica-prod auto-fetch path in
 /// <see cref="BrainIntentPersistenceTools.EvaluateServiceBrainIntentAndPersist"/>.
+/// Sherica fetching is now performed inside <see cref="BrainIntentServiceEvaluator.EvaluateAndPersistAsync"/>;
+/// these tests inject the mock fetcher into the evaluator.
 /// </summary>
 public class ShericaAutoFetchTests
 {
     private static readonly string ServiceId   = "df36aee8-c644-400b-a0ab-fd0f1191211d";
     private static readonly string ServiceName = "App Service (Web Apps)";
 
-    private static BrainIntentPersistenceTools BuildTools(
-        IShericaMonitorFetcher shericaFetcher,
-        IReadOnlyList<BrainIntentEvaluationRow>? rowsToReturn = null)
+    private static (BrainIntentPersistenceTools tools, Mock<IKustoBrainIntentWriter> writerMock)
+        BuildTools(IShericaMonitorFetcher shericaFetcher)
     {
         var writerMock = new Mock<IKustoBrainIntentWriter>();
         writerMock
@@ -30,13 +31,17 @@ public class ShericaAutoFetchTests
 
         var genevaFetcherMock = new Mock<IGenevaMonitorFetcher>();
 
-        var evaluator = new BrainIntentServiceEvaluator(writerMock.Object);
+        var evaluator = new BrainIntentServiceEvaluator(
+            writerMock.Object,
+            shericaFetcher,
+            NullLogger<BrainIntentServiceEvaluator>.Instance);
 
-        return new BrainIntentPersistenceTools(
+        var tools = new BrainIntentPersistenceTools(
             evaluator,
             genevaFetcherMock.Object,
-            shericaFetcher,
             writerMock.Object);
+
+        return (tools, writerMock);
     }
 
     [Fact]
@@ -52,7 +57,7 @@ public class ShericaAutoFetchTests
             .Setup(f => f.FetchMonitorsForServiceAsync(ServiceId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(monitors.AsReadOnly());
 
-        var tools = BuildTools(shericaMock.Object);
+        var (tools, _) = BuildTools(shericaMock.Object);
 
         var result = await tools.EvaluateServiceBrainIntentAndPersist(
             serviceId:    ServiceId,
@@ -89,9 +94,13 @@ public class ShericaAutoFetchTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var evaluator = new BrainIntentServiceEvaluator(writerMock.Object);
+        var evaluator = new BrainIntentServiceEvaluator(
+            writerMock.Object,
+            shericaMock.Object,
+            NullLogger<BrainIntentServiceEvaluator>.Instance);
+
         var tools = new BrainIntentPersistenceTools(
-            evaluator, genevaFetcherMock.Object, shericaMock.Object, writerMock.Object);
+            evaluator, genevaFetcherMock.Object, writerMock.Object);
 
         var result = await tools.EvaluateServiceBrainIntentAndPersist(
             serviceId:       ServiceId,
@@ -112,7 +121,7 @@ public class ShericaAutoFetchTests
     {
         var shericaMock = new Mock<IShericaMonitorFetcher>();
 
-        var tools = BuildTools(shericaMock.Object);
+        var (tools, _) = BuildTools(shericaMock.Object);
 
         var result = await tools.EvaluateServiceBrainIntentAndPersist(
             serviceId:    ServiceId,
@@ -136,7 +145,7 @@ public class ShericaAutoFetchTests
             .Setup(f => f.FetchMonitorsForServiceAsync(ServiceId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<MonitorEvaluationInput>());
 
-        var tools = BuildTools(shericaMock.Object);
+        var (tools, _) = BuildTools(shericaMock.Object);
 
         var result = await tools.EvaluateServiceBrainIntentAndPersist(
             serviceId:    ServiceId,
@@ -157,7 +166,7 @@ public class ShericaAutoFetchTests
             .Setup(f => f.FetchMonitorsForServiceAsync(ServiceId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Kusto connection failed"));
 
-        var tools = BuildTools(shericaMock.Object);
+        var (tools, _) = BuildTools(shericaMock.Object);
 
         var result = await tools.EvaluateServiceBrainIntentAndPersist(
             serviceId:    ServiceId,
@@ -196,7 +205,7 @@ public class ShericaAutoFetchTests
             .Setup(f => f.FetchMonitorsForServiceAsync(ServiceId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(monitors.AsReadOnly());
 
-        var tools = BuildTools(shericaMock.Object);
+        var (tools, _) = BuildTools(shericaMock.Object);
 
         var result = await tools.EvaluateServiceBrainIntentAndPersist(
             serviceId:    ServiceId,
