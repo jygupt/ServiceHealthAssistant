@@ -57,7 +57,7 @@ public sealed class ServiceHealthTools
     // -----------------------------------------------------------------------
 
     [McpServerTool(Name = "validate_lid_compliance")]
-    [Description("Validate LID (Latency, Impact, Dependency) compliance for a signal. Returns compliance status, score (0.0–1.0), missing dimensions, and remediation recommendations.")]
+    [Description("Validate LID (Location ID) compliance for a signal. Checks whether the signal exposes a valid, standardized Location ID dimension emitting ARM region names (not DCMT region codes or cluster/node identifiers). Returns compliance status, score (0.0–1.0), missing elements, and remediation recommendations. LID compliance is a safety prerequisite for Brain/AOD automation, routing, and policy enforcement.")]
     public static string ValidateLidCompliance(
         [Description("Signal identifier.")] string signalId,
         [Description("Signal type: SLI or ServiceMonitor.")] SignalType signalType,
@@ -252,7 +252,7 @@ public sealed class ServiceHealthTools
         [Description("Linked CUJO journey ID (if available).")] string? linkedCujoJourney = null,
         [Description("True if the monitor is mapped to an outage-driving ICM.")] bool outageDrivingIcmMapping = false,
         [Description("Primary impact type detected by the monitor: Customer, Platform, Deployment, or Operational.")] DetectedImpactType detectedImpactType = DetectedImpactType.Operational,
-        [Description("True if the monitor has LID (Latency, Impact, Dependency) dimensions present.")] bool lidPresence = false,
+        [Description("True if the monitor has a valid Location ID dimension present (emitting ARM region names, not DCMT codes or cluster/node identifiers).")] bool lidPresence = false,
         [Description("True if the monitor can detect regionally scoped impact.")] bool regionalScopeDetectable = false,
         [Description("True if the monitor can detect subscription-scoped impact.")] bool subscriptionScopeDetectable = false,
         [Description("Historical precision of the monitor signal: High, Medium, or Low.")] HistoricalPrecision historicalPrecision = HistoricalPrecision.Low,

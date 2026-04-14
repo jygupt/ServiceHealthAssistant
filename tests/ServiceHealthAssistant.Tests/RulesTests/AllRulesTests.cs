@@ -98,46 +98,79 @@ public class LidComplianceTests
         names.Select(n => new MetricDimension(n)).ToList().AsReadOnly();
 
     [Fact]
-    public void AllThreeDimensions_IsCompliant()
+    public void LocationDimension_ValidArmRegion_IsCompliant()
     {
-        var dims = Dims("Latency_P99", "AvailabilityRate", "ServiceName");
+        // Region is a recognised location dimension name and contains no DCMT/cluster indicators
+        var dims = Dims("Region", "AvailabilityRate");
         var result = ServiceHealthRules.EvaluateLidCompliance("sig-1", SignalType.SLI, dims);
 
         Assert.Equal(ComplianceStatus.Compliant, result.Status);
         Assert.Equal(1.0, result.Score);
-        Assert.True(result.LatencyPresent);
-        Assert.True(result.ImpactPresent);
+        Assert.True(result.LocationIdPresent);
+        Assert.True(result.LocationIdValidArmRegion);
+        Assert.Contains("Region", result.LocationDimensions);
     }
 
     [Fact]
-    public void MissingLatency_IsPartial()
+    public void LocationIdDimension_NoInvalidPatterns_IsCompliant()
     {
-        var dims = Dims("AvailabilityRate", "ServiceName");
+        var dims = Dims("LocationId", "ErrorRate");
         var result = ServiceHealthRules.EvaluateLidCompliance("sig-2", SignalType.SLI, dims);
 
-        Assert.Equal(ComplianceStatus.Partial, result.Status);
-        Assert.False(result.LatencyPresent);
-        Assert.Contains(result.MissingDimensions, m => m.Contains("Latency"));
+        Assert.Equal(ComplianceStatus.Compliant, result.Status);
+        Assert.True(result.LocationIdPresent);
+        Assert.True(result.LocationIdValidArmRegion);
+    }
+
+    [Fact]
+    public void NoLocationDimension_IsNonCompliant()
+    {
+        // Legacy latency/availability/service dimensions do not satisfy Location ID compliance
+        var dims = Dims("Latency_P99", "AvailabilityRate", "ServiceName");
+        var result = ServiceHealthRules.EvaluateLidCompliance("sig-3", SignalType.SLI, dims);
+
+        Assert.Equal(ComplianceStatus.NonCompliant, result.Status);
+        Assert.Equal(0.0, result.Score);
+        Assert.False(result.LocationIdPresent);
+        Assert.Contains(result.MissingDimensions, m => m.Contains("Location ID"));
     }
 
     [Fact]
     public void NoDimensions_IsNonCompliant()
     {
-        var result = ServiceHealthRules.EvaluateLidCompliance("sig-3", SignalType.SLI, null);
+        var result = ServiceHealthRules.EvaluateLidCompliance("sig-4", SignalType.SLI, null);
 
         Assert.Equal(ComplianceStatus.NonCompliant, result.Status);
         Assert.Equal(0.0, result.Score);
     }
 
     [Fact]
-    public void KqlCompensatesForMissingDimensions()
+    public void LocationDimension_DcmtInKql_IsPartial()
     {
+        // Location dimension name is present but KQL references DCMT-style codes
+        var dims = Dims("Region");
         var result = ServiceHealthRules.EvaluateLidCompliance(
-            "sig-4", SignalType.SLI, null,
-            kqlQuery: "| where latency > 200 | where availability < 99 | where region == 'us'");
+            "sig-5", SignalType.SLI, dims,
+            kqlQuery: "| where Region == 'DM-USEA-1'");
 
-        Assert.True(result.LatencyPresent);
-        Assert.True(result.ImpactPresent);
+        Assert.Equal(ComplianceStatus.Partial, result.Status);
+        Assert.Equal(0.5, result.Score);
+        Assert.True(result.LocationIdPresent);
+        Assert.False(result.LocationIdValidArmRegion);
+        Assert.Contains(result.MissingDimensions, m => m.Contains("ARM region"));
+    }
+
+    [Fact]
+    public void KqlWithRegionFilter_LocationIdPresent()
+    {
+        // KQL references a 'region' column — location dimension detected even without a named dimension
+        var result = ServiceHealthRules.EvaluateLidCompliance(
+            "sig-6", SignalType.SLI, null,
+            kqlQuery: "| where region == 'eastus' | where availability < 99");
+
+        Assert.True(result.LocationIdPresent);
+        Assert.True(result.LocationIdValidArmRegion);
+        Assert.Equal(ComplianceStatus.Compliant, result.Status);
     }
 }
 
@@ -188,8 +221,8 @@ public class SliQualityTests
     private static LidComplianceResult MakeLid(double score) => new(
         "sli-1", SignalType.SLI,
         score == 1.0 ? ComplianceStatus.Compliant : ComplianceStatus.Partial,
-        LatencyPresent: true, ImpactPresent: true,
-        DependencyDimensions: [],
+        LocationIdPresent: true, LocationIdValidArmRegion: score == 1.0,
+        LocationDimensions: [],
         MissingDimensions: [],
         Score: score,
         Recommendations: []);
@@ -257,14 +290,14 @@ public class PreFlightValidationTests
     {
         var dims = new[]
         {
-            new MetricDimension("Latency_P99", PresentInMdm: true),
+            new MetricDimension("Region", PresentInMdm: true),
             new MetricDimension("AvailabilityRate", PresentInMdm: true),
             new MetricDimension("ServiceName", PresentInMdm: true)
         };
         var req = new PreFlightValidationRequest(
             "sig-2", SignalType.SLI,
             "Azure.MyService", "RequestLatency",
-            KqlQuery: "Azure.MyService | where Latency > 200",
+            KqlQuery: "Azure.MyService | where region == 'eastus'",
             Dimensions: dims,
             BrainIntent: BrainIntentCategory.CustomerImpact,
             Owner: "sre-team");
@@ -493,6 +526,7 @@ public class SliTemplateTests
 
         var lidAdded = (List<string>)template["lid_dimensions_added"]!;
         Assert.NotEmpty(lidAdded);
+        Assert.Contains("LocationId", lidAdded);
         Assert.Equal("SLI", template["type"]);
         Assert.Equal("CUJO-1", template["cujo_id"]);
     }
@@ -500,7 +534,8 @@ public class SliTemplateTests
     [Fact]
     public void AllLidDimsPresent_NoneAdded()
     {
-        string[] dims = ["Latency_P99", "AvailabilityRate", "ServiceName"];
+        // A 'Region' dimension satisfies Location ID compliance — no LID dimension should be added.
+        string[] dims = ["Region", "AvailabilityRate"];
         var template = ServiceHealthRules.GenerateSliTemplate(
             "SvcA", null, "Azure.SvcA", "Availability",
             SignalType.SLI, BrainIntentCategory.CustomerImpact,

@@ -11,18 +11,19 @@ namespace ServiceHealthAssistant.Rules;
 public static class ServiceHealthRules
 {
     // -----------------------------------------------------------------------
-    // LID pattern matching (case-insensitive)
+    // LID (Location ID) dimension patterns
     // -----------------------------------------------------------------------
-    private static readonly Regex LatencyPattern = new(
-        @"(latency|p50|p75|p90|p95|p99|duration|response_time)",
+
+    // Detects dimension names that represent geographic Location ID fields (ARM region fields).
+    // These are the fields that should emit ARM region names such as 'eastus' or 'westeurope'.
+    private static readonly Regex LocationDimensionNamePattern = new(
+        @"\b(location|locationid|region|regionname|armregion|geo)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex ImpactPattern = new(
-        @"(availability|success_rate|error_rate|failure_rate|throughput|rps|qps|impact)",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private static readonly Regex DependencyPattern = new(
-        @"(dependency|upstream|downstream|service|component|region|datacenter|cluster)",
+    // Detects DCMT region codes (e.g. DM-USEA-1, DC-USWA-3), cluster names, node names,
+    // pod names, and other non-ARM resource identifiers that must NOT be used as Location ID values.
+    private static readonly Regex InvalidLocationPattern = new(
+        @"\b(cluster(name|id)?|node(name|id)?|pod(name|id)?|host(name|id)?|rack(id)?|shard|partition)\b|\bDM-[A-Z]{2,6}\b|\bDC-[A-Z]{2,6}\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Minimum quality score to be considered publish-safe
@@ -115,10 +116,18 @@ public static class ServiceHealthRules
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Enforce LID (Latency, Impact, Dependency) compliance.
-    /// A signal is compliant when it exposes at least one latency dimension,
-    /// one impact dimension, and one dependency dimension — either via metric
-    /// dimensions or via the KQL query text.
+    /// Enforce LID (Location ID) compliance.
+    /// LID Compliance measures whether a signal reliably emits accurate, constructable,
+    /// standardized Location IDs (ARM region names) across telemetry, enabling correct
+    /// regional attribution and trustworthy rollups. It is a safety prerequisite for
+    /// Brain/AOD automation, routing, correlation, and policy enforcement.
+    ///
+    /// A signal is compliant when:
+    ///   1. It exposes at least one Location ID dimension (e.g. Region, LocationId, ArmRegion).
+    ///   2. That dimension represents a valid ARM region name — NOT a DCMT region code
+    ///      (e.g. DM-USEA-1), cluster ID, node ID, or other resource string.
+    ///
+    /// Score: 0.5 per satisfied check → 0.0 (NonCompliant) / 0.5 (Partial) / 1.0 (Compliant).
     /// </summary>
     public static LidComplianceResult EvaluateLidCompliance(
         string signalId,
@@ -128,22 +137,32 @@ public static class ServiceHealthRules
     {
         var dims = dimensions ?? [];
         var dimNames = dims.Select(d => d.Name).ToList();
-        string combined = string.Join(" ", dimNames) + " " + kqlQuery;
 
-        bool latencyPresent = LatencyPattern.IsMatch(combined);
-        bool impactPresent = ImpactPattern.IsMatch(combined);
-        var dependencyDims = dimNames.Where(n => DependencyPattern.IsMatch(n)).ToList();
-        bool dependencyPresent = dependencyDims.Count > 0 || DependencyPattern.IsMatch(kqlQuery);
+        // 1. Location ID presence: any dimension name or KQL column reference is a location field.
+        var locationDims = dimNames
+            .Where(n => LocationDimensionNamePattern.IsMatch(n))
+            .ToList();
+        bool locationIdPresent = locationDims.Count > 0 || LocationDimensionNamePattern.IsMatch(kqlQuery);
+
+        // 2. ARM region validity: when a location field is present, verify it is not backed by
+        //    DCMT region codes, cluster names, node names, or other non-ARM resource identifiers.
+        bool locationIdValidArmRegion = false;
+        if (locationIdPresent)
+        {
+            bool invalidInDimNames = locationDims.Any(n => InvalidLocationPattern.IsMatch(n));
+            bool invalidInKql = InvalidLocationPattern.IsMatch(kqlQuery);
+            locationIdValidArmRegion = !invalidInDimNames && !invalidInKql;
+        }
 
         var missing = new List<string>();
-        if (!latencyPresent)  missing.Add("Latency dimension (p50/p95/p99/duration)");
-        if (!impactPresent)   missing.Add("Impact dimension (availability/error_rate/success_rate)");
-        if (!dependencyPresent) missing.Add("Dependency dimension (service/region/cluster)");
+        if (!locationIdPresent)
+            missing.Add("Location ID dimension (e.g. Region, LocationId, ArmRegion)");
+        else if (!locationIdValidArmRegion)
+            missing.Add("Valid ARM region name — avoid DCMT region codes (e.g. DM-USEA-1) and cluster/node identifiers");
 
         double score = Math.Round(
-            ((latencyPresent ? 1.0 : 0.0) +
-             (impactPresent  ? 1.0 : 0.0) +
-             (dependencyPresent ? 1.0 : 0.0)) / 3.0, 2);
+            (locationIdPresent ? 0.5 : 0.0) +
+            (locationIdValidArmRegion ? 0.5 : 0.0), 2);
 
         ComplianceStatus status =
             score == 1.0 ? ComplianceStatus.Compliant :
@@ -152,14 +171,14 @@ public static class ServiceHealthRules
 
         var recommendations = new List<string>();
         foreach (var m in missing)
-            recommendations.Add($"Add required LID dimension: {m}");
+            recommendations.Add($"Add required LID element: {m}");
         if (status != ComplianceStatus.Compliant)
-            recommendations.Add("LID compliance is required for Brain Intent validation and S360 KPI health.");
+            recommendations.Add("LID compliance is required for Brain/AOD automation, routing, correlation, and policy enforcement.");
 
         return new LidComplianceResult(
             signalId, signalType, status,
-            latencyPresent, impactPresent,
-            dependencyDims.AsReadOnly(), missing.AsReadOnly(),
+            locationIdPresent, locationIdValidArmRegion,
+            locationDims.AsReadOnly(), missing.AsReadOnly(),
             score, recommendations.AsReadOnly());
     }
 
@@ -546,7 +565,7 @@ public static class ServiceHealthRules
     /// Safety gates (all must pass for READY):
     ///   1. Brain-aware
     ///   2. Brain Intent = CustomerImpact (for AOD)
-    ///   3. LID fully compliant
+    ///   3. LID fully compliant (valid Location ID emitting ARM region names)
     ///   4. Quality score >= 0.70
     /// </summary>
     public static AutomationReadinessResult EvaluateAutomationReadiness(
@@ -576,7 +595,7 @@ public static class ServiceHealthRules
         if (lidStatus != ComplianceStatus.Compliant)
         {
             blocking.Add($"LID compliance status is '{lidStatus}', not Compliant.");
-            remediation.Add("Achieve full LID compliance (Latency, Impact, Dependency dimensions).");
+            remediation.Add("Achieve full LID compliance: add a valid Location ID dimension (e.g. Region, LocationId) emitting ARM region names such as 'eastus' or 'westeurope'.");
         }
 
         if (qualityScore < MinPublishScore)
@@ -726,7 +745,7 @@ public static class ServiceHealthRules
     /// <summary>
     /// Generate a starter SLI or Service Monitor template with KQL query,
     /// required dimensions, threshold placeholder, and LID compliance guidance.
-    /// Auto-adds missing LID dimensions.
+    /// Auto-adds a missing Location ID dimension if none is present.
     /// </summary>
     public static Dictionary<string, object?> GenerateSliTemplate(
         string serviceName,
@@ -751,9 +770,7 @@ public static class ServiceHealthRules
             $"| where Value {op} {thresholdStr}";
 
         var lidAdded = new List<string>();
-        if (!dimensions.Any(d => LatencyPattern.IsMatch(d)))   lidAdded.Add("Latency_P99");
-        if (!dimensions.Any(d => ImpactPattern.IsMatch(d)))    lidAdded.Add("AvailabilityRate");
-        if (!dimensions.Any(d => DependencyPattern.IsMatch(d))) lidAdded.Add("ServiceName");
+        if (!dimensions.Any(d => LocationDimensionNamePattern.IsMatch(d))) lidAdded.Add("LocationId");
 
         var allDims = dimensions.Concat(lidAdded).ToList();
 

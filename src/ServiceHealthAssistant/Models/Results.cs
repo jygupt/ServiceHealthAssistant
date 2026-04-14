@@ -11,14 +11,17 @@ public sealed record SignalClassificationResult(
     string Rationale,
     IReadOnlyList<string> Recommendations);
 
-/// <summary>Result of a LID (Latency, Impact, Dependency) compliance check.</summary>
+/// <summary>Result of a LID (Location ID) compliance check.
+/// LID Compliance measures how reliably a signal emits accurate, constructable,
+/// standardized Location IDs (ARM region names) across telemetry, enabling correct
+/// regional attribution and trustworthy rollups for Brain/AOD automation.</summary>
 public sealed record LidComplianceResult(
     string SignalId,
     SignalType SignalType,
     ComplianceStatus Status,
-    bool LatencyPresent,
-    bool ImpactPresent,
-    IReadOnlyList<string> DependencyDimensions,
+    bool LocationIdPresent,
+    bool LocationIdValidArmRegion,
+    IReadOnlyList<string> LocationDimensions,
     IReadOnlyList<string> MissingDimensions,
     double Score,
     IReadOnlyList<string> Recommendations);
