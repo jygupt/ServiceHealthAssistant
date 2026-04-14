@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ServiceHealthAssistant")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+00871771f4030b995aefe7b2729d87d530baf79b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f5bdf8cd91b115ffbc926200d5969dd725d02d6b")]
 [assembly: System.Reflection.AssemblyProductAttribute("ServiceHealthAssistant")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ServiceHealthAssistant")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -159,8 +159,7 @@ public sealed class BrainIntentServiceEvaluator
 
         // 3. Evaluate each monitor with bounded concurrency and per-monitor fault isolation.
         var results = new BrainIntentEvaluationRow?[monitors.Count];
-        var failures = new List<(string MonitorId, Exception Ex)>();
-        var failureLock = new object();
+        var failureCount = 0;
 
         using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
 
@@ -173,8 +172,7 @@ public sealed class BrainIntentServiceEvaluator
             }
             catch (Exception ex)
             {
-                lock (failureLock)
-                    failures.Add((monitor.MonitorId, ex));
+                Interlocked.Increment(ref failureCount);
                 _logger.LogWarning(ex,
                     "Brain Intent evaluation failed for monitor '{MonitorId}' (service '{ServiceOid}').",
                     monitor.MonitorId, serviceOid);
@@ -192,21 +190,19 @@ public sealed class BrainIntentServiceEvaluator
         _logger.LogInformation(
             "Brain Intent evaluation complete for service '{ServiceOid}': " +
             "{Evaluated} evaluated, {Failed} failed.",
-            serviceOid, evaluated.Count, failures.Count);
+            serviceOid, evaluated.Count, failureCount);
 
         // 4. Persist in batches to avoid per-row ingestion overhead.
-        var persisted = 0;
         for (int i = 0; i < evaluated.Count; i += batchSize)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var batch = evaluated.Skip(i).Take(batchSize).ToList().AsReadOnly();
             await _writer.IngestBatchAsync(batch, cancellationToken);
-            persisted += batch.Count;
         }
 
         _logger.LogInformation(
             "Brain Intent persistence complete for service '{ServiceOid}': {Persisted} rows persisted.",
-            serviceOid, persisted);
+            serviceOid, evaluated.Count);
 
         return evaluated.AsReadOnly();
     }
