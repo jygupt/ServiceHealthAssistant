@@ -134,7 +134,7 @@ public class BrainIntentNormalizationTests
 public class BrainIntentBatchingTests
 {
     private static readonly DateTime FixedTimestamp = new(2025, 6, 15, 12, 0, 0, DateTimeKind.Utc);
-    private static readonly string ServiceOid = "svc-batch-test";
+    private static readonly string ServiceOid = "12345678-abcd-1234-abcd-123456789012";
 
     private static MonitorEvaluationInput MakeMonitor(int index) =>
         new($"mon-{index}", $"Monitor{index}");
