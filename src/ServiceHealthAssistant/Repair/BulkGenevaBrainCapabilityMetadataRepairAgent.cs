@@ -90,6 +90,9 @@ public sealed class BulkGenevaBrainCapabilityMetadataRepairAgent
         foreach (var key in BrainCapabilityMetadataKeys.All)
             perCapUpdated[key] = 0;
 
+        // O(1) lookup for transition tracking.
+        var descriptorById = monitorDescriptors.ToDictionary(m => m.MonitorId, m => m);
+
         int shouldBeEnabledCandidatesUpdated = 0;
         bool aborted = false;
 
@@ -124,13 +127,15 @@ public sealed class BulkGenevaBrainCapabilityMetadataRepairAgent
                 {
                     // A transition is counted when the dashboard showed ShouldBeEnabled
                     // and we applied Enabled.
-                    var descriptor = monitorDescriptors.First(m => m.MonitorId == r.MonitorId);
-                    var previousStatus = GetCurrentStatus(descriptor, key);
-                    if (previousStatus == BrainIntentStatus.ShouldBeEnabled
-                        && string.Equals(newVal, nameof(BrainIntentStatus.Enabled),
-                            StringComparison.OrdinalIgnoreCase))
+                    if (descriptorById.TryGetValue(r.MonitorId, out var descriptor))
                     {
-                        shouldBeEnabledCandidatesUpdated++;
+                        var previousStatus = GetCurrentStatus(descriptor, key);
+                        if (previousStatus == BrainIntentStatus.ShouldBeEnabled
+                            && string.Equals(newVal, nameof(BrainIntentStatus.Enabled),
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            shouldBeEnabledCandidatesUpdated++;
+                        }
                     }
                 }
             }

@@ -52,7 +52,8 @@ public sealed class GenevaMonitorMetadataClient : IGenevaMonitorMetadataClient, 
         if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(monitorId))
             return new Dictionary<string, string>();
 
-        // Allowlist validation to prevent KQL injection.
+        // Allowlist validation for accountId (used inline in KQL literals in GenevaMonitorFetcher
+        // as well; kept consistent here).
         if (!System.Text.RegularExpressions.Regex.IsMatch(accountId, @"^[a-zA-Z0-9\-_.]+$"))
             throw new ArgumentException($"accountId '{accountId}' contains invalid characters.");
 
@@ -60,6 +61,8 @@ public sealed class GenevaMonitorMetadataClient : IGenevaMonitorMetadataClient, 
         {
             ClientRequestId = $"ServiceHealthAssistant;GetCapabilityMetadata;{Guid.NewGuid()}"
         };
+        // Both accountId and monitorId are bound as query parameters to prevent KQL injection.
+        // accountId additionally passes the allowlist check above for defence in depth.
         props.SetParameter("_accountId", accountId);
         props.SetParameter("_monitorId", monitorId);
 
@@ -79,8 +82,7 @@ public sealed class GenevaMonitorMetadataClient : IGenevaMonitorMetadataClient, 
             """;
 
         _logger.LogInformation(
-            "Reading capability metadata for monitor '{MonitorId}' account '{AccountId}'.",
-            monitorId, accountId);
+            "Reading capability metadata for monitor '{MonitorId}'.", monitorId);
 
         var result = new Dictionary<string, string>(4);
 
@@ -126,8 +128,8 @@ public sealed class GenevaMonitorMetadataClient : IGenevaMonitorMetadataClient, 
     {
         _logger.LogWarning(
             "UpdateCapabilityMetadataAsync is a stub – Geneva write endpoint not yet wired. " +
-            "AccountId={AccountId} MonitorId={MonitorId} Keys={Keys}",
-            accountId, monitorId, string.Join(", ", metadataUpdates.Keys));
+            "MonitorId={MonitorId} Keys={Keys}",
+            monitorId, string.Join(", ", metadataUpdates.Keys));
 
         // TODO: Replace with real Geneva metadata write call.
         // Expected contract (pending confirmation):

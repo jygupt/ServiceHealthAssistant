@@ -326,14 +326,14 @@ public class ThrottlingTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(async (string _, string _, CancellationToken _) =>
             {
-                int active;
                 lock (lockObj)
                 {
-                    active = Interlocked.Increment(ref currentActive);
-                    if (active > peakConcurrent) peakConcurrent = active;
+                    currentActive++;
+                    if (currentActive > peakConcurrent)
+                        peakConcurrent = currentActive;
                 }
                 await Task.Delay(5);
-                Interlocked.Decrement(ref currentActive);
+                lock (lockObj) { currentActive--; }
                 return (IReadOnlyDictionary<string, string>)new Dictionary<string, string>();
             });
 

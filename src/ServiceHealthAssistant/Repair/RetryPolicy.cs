@@ -77,23 +77,15 @@ public static class RetryPolicy
             }
             catch (Exception ex)
             {
+                // Last attempt or non-transient exception – fail immediately.
                 errors.Add(ex);
                 throw new AggregateException(
                     $"Operation failed after {attempt} attempt(s).", errors);
             }
         }
 
-        // Final attempt – let any exception propagate after collecting it.
-        try
-        {
-            return await operation(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            errors.Add(ex);
-            throw new AggregateException(
-                $"Operation failed after {maxAttempts} attempt(s).", errors);
-        }
+        // Unreachable: the loop body always returns or throws.
+        throw new InvalidOperationException("Unreachable.");
     }
 
     /// <summary>
