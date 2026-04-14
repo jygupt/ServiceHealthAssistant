@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using ServiceHealthAssistant.Adx;
 using ServiceHealthAssistant.Evaluators;
@@ -133,22 +134,39 @@ public class BrainIntentNormalizationTests
 public class BrainIntentBatchingTests
 {
     private static readonly DateTime FixedTimestamp = new(2025, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly string ServiceOid = "12345678-abcd-1234-abcd-123456789012";
 
     private static MonitorEvaluationInput MakeMonitor(int index) =>
         new($"mon-{index}", $"Monitor{index}");
 
-    [Fact]
-    public async Task EvaluateAndPersist_SingleBatch_CallsIngestOnce()
+    private static (BrainIntentServiceEvaluator evaluator, Mock<IKustoBrainIntentWriter> writerMock)
+        BuildEvaluator(IReadOnlyList<MonitorEvaluationInput> monitors)
     {
         var writerMock = new Mock<IKustoBrainIntentWriter>();
         writerMock
             .Setup(w => w.IngestBatchAsync(It.IsAny<IReadOnlyList<BrainIntentEvaluationRow>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var evaluator = new BrainIntentServiceEvaluator(writerMock.Object);
-        var monitors = Enumerable.Range(0, 5).Select(MakeMonitor).ToList();
+        var shericaMock = new Mock<IShericaMonitorFetcher>();
+        shericaMock
+            .Setup(f => f.FetchMonitorsForServiceAsync(ServiceOid, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(monitors);
 
-        var rows = await evaluator.EvaluateAndPersistAsync("svc-1", "SvcName", monitors,
+        var evaluator = new BrainIntentServiceEvaluator(
+            writerMock.Object,
+            shericaMock.Object,
+            NullLogger<BrainIntentServiceEvaluator>.Instance);
+
+        return (evaluator, writerMock);
+    }
+
+    [Fact]
+    public async Task EvaluateAndPersist_SingleBatch_CallsIngestOnce()
+    {
+        var monitors = Enumerable.Range(0, 5).Select(MakeMonitor).ToList().AsReadOnly();
+        var (evaluator, writerMock) = BuildEvaluator(monitors);
+
+        var rows = await evaluator.EvaluateAndPersistAsync(ServiceOid, "SvcName",
             evaluationTimestamp: FixedTimestamp, batchSize: 10);
 
         Assert.Equal(5, rows.Count);
@@ -162,16 +180,25 @@ public class BrainIntentBatchingTests
     public async Task EvaluateAndPersist_MultipleBatches_CallsIngestExpectedTimes()
     {
         var capturedBatches = new List<IReadOnlyList<BrainIntentEvaluationRow>>();
+        var monitors = Enumerable.Range(0, 25).Select(MakeMonitor).ToList().AsReadOnly();
+
         var writerMock = new Mock<IKustoBrainIntentWriter>();
         writerMock
             .Setup(w => w.IngestBatchAsync(It.IsAny<IReadOnlyList<BrainIntentEvaluationRow>>(), It.IsAny<CancellationToken>()))
             .Callback<IReadOnlyList<BrainIntentEvaluationRow>, CancellationToken>((batch, _) => capturedBatches.Add(batch))
             .Returns(Task.CompletedTask);
 
-        var evaluator = new BrainIntentServiceEvaluator(writerMock.Object);
-        var monitors = Enumerable.Range(0, 25).Select(MakeMonitor).ToList();
+        var shericaMock = new Mock<IShericaMonitorFetcher>();
+        shericaMock
+            .Setup(f => f.FetchMonitorsForServiceAsync(ServiceOid, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(monitors);
 
-        var rows = await evaluator.EvaluateAndPersistAsync("svc-2", "BigService", monitors,
+        var evaluator = new BrainIntentServiceEvaluator(
+            writerMock.Object,
+            shericaMock.Object,
+            NullLogger<BrainIntentServiceEvaluator>.Instance);
+
+        var rows = await evaluator.EvaluateAndPersistAsync(ServiceOid, "BigService",
             evaluationTimestamp: FixedTimestamp, batchSize: 10);
 
         Assert.Equal(25, rows.Count);
@@ -186,9 +213,18 @@ public class BrainIntentBatchingTests
     public async Task EvaluateAndPersist_EmptyMonitorList_NeverCallsIngest()
     {
         var writerMock = new Mock<IKustoBrainIntentWriter>();
-        var evaluator = new BrainIntentServiceEvaluator(writerMock.Object);
 
-        var rows = await evaluator.EvaluateAndPersistAsync("svc-3", "EmptyService", [],
+        var shericaMock = new Mock<IShericaMonitorFetcher>();
+        shericaMock
+            .Setup(f => f.FetchMonitorsForServiceAsync(ServiceOid, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MonitorEvaluationInput>());
+
+        var evaluator = new BrainIntentServiceEvaluator(
+            writerMock.Object,
+            shericaMock.Object,
+            NullLogger<BrainIntentServiceEvaluator>.Instance);
+
+        var rows = await evaluator.EvaluateAndPersistAsync(ServiceOid, "EmptyService",
             evaluationTimestamp: FixedTimestamp);
 
         Assert.Empty(rows);
@@ -200,18 +236,13 @@ public class BrainIntentBatchingTests
     [Fact]
     public async Task EvaluateAndPersist_RowsHaveCorrectServiceId()
     {
-        var writerMock = new Mock<IKustoBrainIntentWriter>();
-        writerMock
-            .Setup(w => w.IngestBatchAsync(It.IsAny<IReadOnlyList<BrainIntentEvaluationRow>>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        var monitors = new[] { MakeMonitor(1) }.AsReadOnly();
+        var (evaluator, _) = BuildEvaluator(monitors);
 
-        var evaluator = new BrainIntentServiceEvaluator(writerMock.Object);
-        var monitors = new[] { MakeMonitor(1) };
-
-        var rows = await evaluator.EvaluateAndPersistAsync("my-service-id", "MyService", monitors,
+        var rows = await evaluator.EvaluateAndPersistAsync(ServiceOid, "MyService",
             evaluationTimestamp: FixedTimestamp);
 
-        Assert.All(rows, r => Assert.Equal("my-service-id", r.ServiceId));
+        Assert.All(rows, r => Assert.Equal(ServiceOid, r.ServiceId));
         Assert.All(rows, r => Assert.Equal("MyService", r.ServiceName));
         Assert.All(rows, r => Assert.Equal(FixedTimestamp, r.EvaluationTimestamp));
         Assert.All(rows, r => Assert.Equal("MCP:evaluate_monitor_brain_integration", r.EvaluationSource));
@@ -221,19 +252,73 @@ public class BrainIntentBatchingTests
     public async Task EvaluateAndPersist_BatchPayloadCount_MatchesMonitorCount()
     {
         var totalIngested = 0;
+        var monitors = Enumerable.Range(0, 15).Select(MakeMonitor).ToList().AsReadOnly();
+
         var writerMock = new Mock<IKustoBrainIntentWriter>();
         writerMock
             .Setup(w => w.IngestBatchAsync(It.IsAny<IReadOnlyList<BrainIntentEvaluationRow>>(), It.IsAny<CancellationToken>()))
             .Callback<IReadOnlyList<BrainIntentEvaluationRow>, CancellationToken>((batch, _) => totalIngested += batch.Count)
             .Returns(Task.CompletedTask);
 
-        var evaluator = new BrainIntentServiceEvaluator(writerMock.Object);
-        var monitors = Enumerable.Range(0, 15).Select(MakeMonitor).ToList();
+        var shericaMock = new Mock<IShericaMonitorFetcher>();
+        shericaMock
+            .Setup(f => f.FetchMonitorsForServiceAsync(ServiceOid, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(monitors);
 
-        await evaluator.EvaluateAndPersistAsync("svc-4", "CountService", monitors,
+        var evaluator = new BrainIntentServiceEvaluator(
+            writerMock.Object,
+            shericaMock.Object,
+            NullLogger<BrainIntentServiceEvaluator>.Instance);
+
+        await evaluator.EvaluateAndPersistAsync(ServiceOid, "CountService",
             evaluationTimestamp: FixedTimestamp, batchSize: 7);
 
         // 15 monitors → 3 batches (7 + 7 + 1) → total ingested = 15.
         Assert.Equal(15, totalIngested);
+    }
+
+    [Fact]
+    public async Task EvaluateAndPersist_DeduplicatesMonitorsByMonitorId()
+    {
+        // Two entries with the same MonitorId – should be treated as one monitor.
+        var monitors = new List<MonitorEvaluationInput>
+        {
+            new("mon-dup", "DuplicateMonitor"),
+            new("mon-dup", "DuplicateMonitorAlias"),
+            new("mon-unique", "UniqueMonitor")
+        }.AsReadOnly();
+
+        var (evaluator, writerMock) = BuildEvaluator(monitors);
+
+        var rows = await evaluator.EvaluateAndPersistAsync(ServiceOid, "DedupeService",
+            evaluationTimestamp: FixedTimestamp);
+
+        // Only 2 unique MonitorIds.
+        Assert.Equal(2, rows.Count);
+        writerMock.Verify(
+            w => w.IngestBatchAsync(It.IsAny<IReadOnlyList<BrainIntentEvaluationRow>>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EvaluateAndPersist_ShericaThrows_PropagatesWithShericaProdInMessage()
+    {
+        var writerMock = new Mock<IKustoBrainIntentWriter>();
+
+        var shericaMock = new Mock<IShericaMonitorFetcher>();
+        shericaMock
+            .Setup(f => f.FetchMonitorsForServiceAsync(ServiceOid, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Kusto connection failed"));
+
+        var evaluator = new BrainIntentServiceEvaluator(
+            writerMock.Object,
+            shericaMock.Object,
+            NullLogger<BrainIntentServiceEvaluator>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => evaluator.EvaluateAndPersistAsync(ServiceOid, "FailService"));
+
+        Assert.Contains("sherica-prod", ex.Message);
+        Assert.Contains("Kusto connection failed", ex.Message);
     }
 }

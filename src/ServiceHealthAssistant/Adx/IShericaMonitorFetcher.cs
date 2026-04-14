@@ -16,10 +16,12 @@ namespace ServiceHealthAssistant.Adx;
 public interface IShericaMonitorFetcher
 {
     /// <summary>
-    /// Returns all monitors found for the given <paramref name="serviceId"/> via
+    /// Returns all monitors found for the given <paramref name="serviceOid"/> via
     /// <c>GetIntegratedMonitorOutageCoverageDrillThrough</c>, looking back 365 days.
+    /// Monitors are returned regardless of CUJO mapping; missing signals influence the
+    /// resulting Brain Intent classification but do not exclude the monitor.
     /// </summary>
     Task<IReadOnlyList<MonitorEvaluationInput>> FetchMonitorsForServiceAsync(
-        string serviceId,
+        string serviceOid,
         CancellationToken cancellationToken = default);
 }
