@@ -72,7 +72,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 MonitorType                  = tostring(MonitorType),
                 IsOutageDriving              = tobool(column_ifexists('IsOutageDriving', false)),
                 DetectedImpactType           = tostring(column_ifexists('DetectedImpactType', '')),
-                LidPresence                  = tobool(column_ifexists('LidPresence', false)),
+                LocationIdPresent            = tobool(column_ifexists('IsLIDCompliant', false)),
                 RegionalScopeDetectable      = tobool(column_ifexists('RegionalScopeDetectable', false)),
                 SubscriptionScopeDetectable  = tobool(column_ifexists('SubscriptionScopeDetectable', false)),
                 HistoricalPrecision          = tostring(column_ifexists('HistoricalPrecision', '')),
@@ -116,7 +116,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 var detectedImpactTypeStr = reader.IsDBNull(4) ? null : reader.GetString(4);
                 var detectedImpactType = ParseImpactType(detectedImpactTypeStr);
 
-                var lidPresence             = !reader.IsDBNull(5) && reader.GetBoolean(5);
+                var locationIdPresent       = !reader.IsDBNull(5) && reader.GetBoolean(5);
                 var regionalScope           = !reader.IsDBNull(6) && reader.GetBoolean(6);
                 var subscriptionScope       = !reader.IsDBNull(7) && reader.GetBoolean(7);
 
@@ -136,7 +136,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                     LinkedCujoJourney:               linkedCujoJourney,
                     OutageDrivingIcmMapping:         isOutageDriving,
                     DetectedImpactType:              detectedImpactType,
-                    LidPresence:                     lidPresence,
+                    LocationIdPresent:               locationIdPresent,
                     RegionalScopeDetectable:         regionalScope,
                     SubscriptionScopeDetectable:     subscriptionScope,
                     HistoricalPrecision:             historicalPrecision,

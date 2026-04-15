@@ -25,7 +25,7 @@ public sealed record MonitorBrainIntegrationRequest(
     string? LinkedCujoJourney = null,
     bool OutageDrivingIcmMapping = false,
     DetectedImpactType DetectedImpactType = DetectedImpactType.Operational,
-    bool LidPresence = false,
+    bool LocationIdPresent = false,
     bool RegionalScopeDetectable = false,
     bool SubscriptionScopeDetectable = false,
     HistoricalPrecision HistoricalPrecision = HistoricalPrecision.Low,

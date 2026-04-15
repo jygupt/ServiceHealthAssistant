@@ -192,7 +192,7 @@ public class ShericaAutoFetchTests
                 LinkedCujoJourney:           "CJ-001",
                 OutageDrivingIcmMapping:     true,
                 DetectedImpactType:          DetectedImpactType.Customer,
-                LidPresence:                 true,
+                LocationIdPresent:           true,
                 RegionalScopeDetectable:     true,
                 SubscriptionScopeDetectable: true,
                 HistoricalPrecision:         HistoricalPrecision.High,

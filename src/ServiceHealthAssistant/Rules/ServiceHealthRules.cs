@@ -674,8 +674,8 @@ public static class ServiceHealthRules
     }
 
     // OutageDeclaration:
-    //   Enabled          – LID-compliant + regionally scoped + stable + high precision.
-    //   ShouldBeEnabled  – outage-relevant (ICM mapped or previously used) but missing LID or stability.
+    //   Enabled          – Location ID present + regionally scoped + stable + high precision.
+    //   ShouldBeEnabled  – outage-relevant (ICM mapped or previously used) but missing Location ID or stability.
     //   WillNotBeEnabled – regional scope not detectable.
     //   NotClassified    – regional scope present but insufficient outage-relevance signals.
     private static BrainIntentStatus EvaluateOutageDeclaration(MonitorBrainIntegrationRequest req)
@@ -687,7 +687,7 @@ public static class ServiceHealthRules
             req.SignalStability == SignalStability.Stable &&
             req.HistoricalPrecision == HistoricalPrecision.High;
 
-        if (req.LidPresence && stableAndPrecise)
+        if (req.LocationIdPresent && stableAndPrecise)
             return BrainIntentStatus.Enabled;
 
         bool outageRelevant = req.OutageDrivingIcmMapping || req.UsedInOutageDeclarationPreviously;

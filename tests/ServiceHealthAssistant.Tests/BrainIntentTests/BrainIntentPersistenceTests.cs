@@ -24,7 +24,7 @@ public class BrainIntentNormalizationTests
             LinkedCujoJourney: "CJ-checkout",
             OutageDrivingIcmMapping: true,
             DetectedImpactType: DetectedImpactType.Customer,
-            LidPresence: true,
+            LocationIdPresent: true,
             RegionalScopeDetectable: true,
             SubscriptionScopeDetectable: true,
             HistoricalPrecision: HistoricalPrecision.High,
@@ -50,7 +50,7 @@ public class BrainIntentNormalizationTests
         Assert.Equal(FixedTimestamp, row.EvaluationTimestamp);
         Assert.Equal("CJ-checkout", row.CujoJourney);
         Assert.Equal("IcM-999", row.LinkedICMIncidentId);
-        Assert.True(row.LIDPresent);
+        Assert.True(row.LocationIdPresent);
         Assert.True(row.RegionalScopeDetectable);
         Assert.True(row.SubscriptionScopeDetectable);
         Assert.Equal(HistoricalPrecision.High, row.HistoricalPrecision);

@@ -24,7 +24,7 @@ public sealed record BrainIntentEvaluationRow(
     DateTime EvaluationTimestamp,
     string? CujoJourney = null,
     string? LinkedICMIncidentId = null,
-    bool? LIDPresent = null,
+    bool? LocationIdPresent = null,
     bool? RegionalScopeDetectable = null,
     bool? SubscriptionScopeDetectable = null,
     HistoricalPrecision? HistoricalPrecision = null,

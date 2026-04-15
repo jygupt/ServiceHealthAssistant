@@ -62,7 +62,7 @@ public sealed class BrainIntentPersistenceTools
             "Id (string, required), Name (string, required), MonitorType (string), " +
             "LinkedCujoJourney (string), OutageDrivingIcmMapping (bool), " +
             "DetectedImpactType (Customer|Platform|Deployment|Operational), " +
-            "LidPresence (bool), RegionalScopeDetectable (bool), " +
+            "LocationIdPresent (bool), RegionalScopeDetectable (bool), " +
             "SubscriptionScopeDetectable (bool), " +
             "HistoricalPrecision (High|Medium|Low), " +
             "SignalStability (Stable|Volatile|Unknown), " +
@@ -388,7 +388,7 @@ public sealed class BrainIntentPersistenceTools
                 EvaluationTimestamp:         evalTimestamp,
                 CujoJourney:                 GetString(e, "CujoJourney"),
                 LinkedICMIncidentId:         GetString(e, "LinkedICMIncidentId"),
-                LIDPresent:                  GetNullableBool(e, "LIDPresent"),
+                LocationIdPresent:           GetNullableBool(e, "LocationIdPresent"),
                 RegionalScopeDetectable:     GetNullableBool(e, "RegionalScopeDetectable"),
                 SubscriptionScopeDetectable: GetNullableBool(e, "SubscriptionScopeDetectable"),
                 HistoricalPrecision:         GetNullableEnum<HistoricalPrecision>(e, "HistoricalPrecision"),
@@ -426,7 +426,7 @@ public sealed class BrainIntentPersistenceTools
                 LinkedCujoJourney:               GetString(e, "LinkedCujoJourney"),
                 OutageDrivingIcmMapping:         GetBool(e, "OutageDrivingIcmMapping"),
                 DetectedImpactType:              GetEnum(e, "DetectedImpactType", DetectedImpactType.Operational),
-                LidPresence:                     GetBool(e, "LidPresence"),
+                LocationIdPresent:               GetBool(e, "LocationIdPresent"),
                 RegionalScopeDetectable:         GetBool(e, "RegionalScopeDetectable"),
                 SubscriptionScopeDetectable:     GetBool(e, "SubscriptionScopeDetectable"),
                 HistoricalPrecision:             GetEnum(e, "HistoricalPrecision", HistoricalPrecision.Low),

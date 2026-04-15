@@ -252,7 +252,7 @@ public sealed class ServiceHealthTools
         [Description("Linked CUJO journey ID (if available).")] string? linkedCujoJourney = null,
         [Description("True if the monitor is mapped to an outage-driving ICM.")] bool outageDrivingIcmMapping = false,
         [Description("Primary impact type detected by the monitor: Customer, Platform, Deployment, or Operational.")] DetectedImpactType detectedImpactType = DetectedImpactType.Operational,
-        [Description("True if the monitor has a valid Location ID dimension present (emitting ARM region names, not DCMT codes or cluster/node identifiers).")] bool lidPresence = false,
+        [Description("True if the monitor has a valid Location ID dimension present (emitting ARM region names, not DCMT codes or cluster/node identifiers).")] bool locationIdPresent = false,
         [Description("True if the monitor can detect regionally scoped impact.")] bool regionalScopeDetectable = false,
         [Description("True if the monitor can detect subscription-scoped impact.")] bool subscriptionScopeDetectable = false,
         [Description("Historical precision of the monitor signal: High, Medium, or Low.")] HistoricalPrecision historicalPrecision = HistoricalPrecision.Low,
@@ -263,7 +263,7 @@ public sealed class ServiceHealthTools
         var req = new MonitorBrainIntegrationRequest(
             monitorName, monitorType, linkedCujoJourney,
             outageDrivingIcmMapping, detectedImpactType,
-            lidPresence, regionalScopeDetectable, subscriptionScopeDetectable,
+            locationIdPresent, regionalScopeDetectable, subscriptionScopeDetectable,
             historicalPrecision, signalStability,
             usedInOutageDeclarationPreviously, communicationRelevantImpact);
 

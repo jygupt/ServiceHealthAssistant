@@ -569,7 +569,7 @@ public class MonitorBrainIntegrationTests
             LinkedCujoJourney: linkedCujoJourney,
             OutageDrivingIcmMapping: outageDrivingIcmMapping,
             DetectedImpactType: impactType,
-            LidPresence: lidPresence,
+            LocationIdPresent: lidPresence,
             RegionalScopeDetectable: regionalScope,
             SubscriptionScopeDetectable: subscriptionScope,
             HistoricalPrecision: precision,
