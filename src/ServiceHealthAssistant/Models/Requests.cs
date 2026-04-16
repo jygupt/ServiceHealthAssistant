@@ -20,12 +20,10 @@ public sealed record SignalClassificationRequest(
 
 /// <summary>Input for evaluating a Geneva Service Monitor's Brain integration capabilities.</summary>
 public sealed record MonitorBrainIntegrationRequest(
-    string MonitorName,
-    string? MonitorType = null,
     string? LinkedCujoJourney = null,
-    bool OutageDrivingIcmMapping = false,
+    bool isBrainAOD = false,
     DetectedImpactType DetectedImpactType = DetectedImpactType.Operational,
-    bool LocationIdPresent = false,
+    bool isLIDCompliant = false,
     bool RegionalScopeDetectable = false,
     bool SubscriptionScopeDetectable = false,
     HistoricalPrecision HistoricalPrecision = HistoricalPrecision.Low,

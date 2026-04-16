@@ -49,7 +49,7 @@ public class ShericaAutoFetchTests
     {
         var monitors = new List<MonitorEvaluationInput>
         {
-            new("mon-001", "CheckoutAvailability", MonitorType: "MdmMetricMonitor")
+            new("mon-001")
         };
 
         var shericaMock = new Mock<IShericaMonitorFetcher>();
@@ -187,17 +187,15 @@ public class ShericaAutoFetchTests
         {
             new(
                 MonitorId:                   "mon-rich",
-                MonitorName:                 "RichMonitor",
-                MonitorType:                 "MetricAlert",
                 LinkedCujoJourney:           "CJ-001",
-                OutageDrivingIcmMapping:     true,
+                isBrainAOD:     true,
                 DetectedImpactType:          DetectedImpactType.Customer,
-                LocationIdPresent:           true,
+                isLIDCompliant:                true,
                 RegionalScopeDetectable:     true,
                 SubscriptionScopeDetectable: true,
                 HistoricalPrecision:         HistoricalPrecision.High,
                 SignalStability:             SignalStability.Stable,
-                LinkedICMIncidentId:         "IcM-42")
+                AllIncidents:         "IcM-42")
         };
 
         var shericaMock = new Mock<IShericaMonitorFetcher>();

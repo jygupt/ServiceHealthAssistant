@@ -102,9 +102,7 @@ public sealed class GenevaMonitorFetcher : IGenevaMonitorFetcher, IDisposable
                 if (id is null) continue;
 
                 results.Add(new MonitorEvaluationInput(
-                    MonitorId:   id,
-                    MonitorName: !string.IsNullOrWhiteSpace(monitorName) ? monitorName : monitorGuid,
-                    MonitorType: string.IsNullOrWhiteSpace(monType) ? null : monType));
+                    MonitorId: id));
             }
         }, cancellationToken);
 

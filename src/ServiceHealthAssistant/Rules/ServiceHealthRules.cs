@@ -642,7 +642,6 @@ public static class ServiceHealthRules
         MonitorBrainIntegrationRequest req)
     {
         return new MonitorBrainIntegrationResult(
-            req.MonitorName,
             new MonitorBrainIntentClassification(
                 BrainAwareness:    EvaluateBrainAwareness(req),
                 OutageDeclaration: EvaluateOutageDeclaration(req),
@@ -660,7 +659,7 @@ public static class ServiceHealthRules
         bool customerImpact = req.DetectedImpactType == DetectedImpactType.Customer;
         bool hasCujoJourney = !string.IsNullOrEmpty(req.LinkedCujoJourney);
 
-        if (customerImpact && req.OutageDrivingIcmMapping && hasCujoJourney)
+        if (customerImpact && req.isBrainAOD && hasCujoJourney)
             return BrainIntentStatus.Enabled;
 
         if (customerImpact)
@@ -687,10 +686,10 @@ public static class ServiceHealthRules
             req.SignalStability == SignalStability.Stable &&
             req.HistoricalPrecision == HistoricalPrecision.High;
 
-        if (req.LocationIdPresent && stableAndPrecise)
+        if (req.isLIDCompliant && stableAndPrecise)
             return BrainIntentStatus.Enabled;
 
-        bool outageRelevant = req.OutageDrivingIcmMapping || req.UsedInOutageDeclarationPreviously;
+        bool outageRelevant = req.isBrainAOD || req.UsedInOutageDeclarationPreviously;
         if (outageRelevant)
             return BrainIntentStatus.ShouldBeEnabled;
 

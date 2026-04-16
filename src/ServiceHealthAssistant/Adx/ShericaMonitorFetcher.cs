@@ -65,20 +65,23 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 _EndTime   = now()
             )
             | where ServiceOid == _serviceOid
-            | summarize arg_max(Timestamp, *) by tostring(MonitorId), tostring(MonitorName)
+            | summarize arg_max(Timestamp, *) by tostring(MonitorId)
             | project
                 MonitorId                    = tostring(MonitorId),
-                MonitorName                  = tostring(MonitorName),
-                MonitorType                  = tostring(MonitorType),
-                IsOutageDriving              = tobool(column_ifexists('IsOutageDriving', false)),
+                ServiceOid                    = tostring(ServiceOid),
+                ServiceName                   = tostring(ServiceName),
+                AllIncidents                 = tostring(AllIncidents),
+                BrainMonitorisAOD             = tobool(column_ifexists('BrainMonitorisAOD', false)),
+                AODETA = tostring(column_ifexists('AODETA', '')),
+                LIDComplianceReason           = tostring(column_ifexists('LIDComplianceReason', '')),
+                AllIncidentsCount              = toint(column_ifexists('AllIncidentsCount', 0)),
                 DetectedImpactType           = tostring(column_ifexists('DetectedImpactType', '')),
-                LocationIdPresent            = tobool(column_ifexists('IsLIDCompliant', false)),
+                IsLIDCompliant               = tobool(column_ifexists('IsLIDCompliant', false)),
                 RegionalScopeDetectable      = tobool(column_ifexists('RegionalScopeDetectable', false)),
                 SubscriptionScopeDetectable  = tobool(column_ifexists('SubscriptionScopeDetectable', false)),
                 HistoricalPrecision          = tostring(column_ifexists('HistoricalPrecision', '')),
                 SignalStability              = tostring(column_ifexists('SignalStability', '')),
-                LinkedCujoJourney            = tostring(column_ifexists('LinkedCujoJourney', '')),
-                LinkedICMIncidentId          = tostring(column_ifexists('LinkedICMIncidentId', ''))
+                LinkedCujoJourney            = tostring(column_ifexists('LinkedCujoJourney', ''))
             """;
 
         _logger.LogInformation(
@@ -101,47 +104,41 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var monitorId   = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
-                var monitorName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-                var monitorType = reader.IsDBNull(2) ? null         : (string?)reader.GetString(2);
 
                 // Skip rows with no usable identifier.
                 var id = !string.IsNullOrWhiteSpace(monitorId)   ? monitorId
-                       : !string.IsNullOrWhiteSpace(monitorName) ? monitorName
                        : null;
 
                 if (id is null) continue;
 
-                var isOutageDriving = !reader.IsDBNull(3) && reader.GetBoolean(3);
+                var isBrainAOD = !reader.IsDBNull(3) && reader.GetBoolean(4);
 
-                var detectedImpactTypeStr = reader.IsDBNull(4) ? null : reader.GetString(4);
+                var detectedImpactTypeStr = reader.IsDBNull(4) ? null : reader.GetString(8);
                 var detectedImpactType = ParseImpactType(detectedImpactTypeStr);
+                var allIncidents = reader.IsDBNull(2) ? null : reader.GetString(3);
+                var isLidCompliant       = !reader.IsDBNull(5) && reader.GetBoolean(9);
+                var regionalScope           = !reader.IsDBNull(6) && reader.GetBoolean(10);
+                var subscriptionScope       = !reader.IsDBNull(7) && reader.GetBoolean(11);
 
-                var locationIdPresent       = !reader.IsDBNull(5) && reader.GetBoolean(5);
-                var regionalScope           = !reader.IsDBNull(6) && reader.GetBoolean(6);
-                var subscriptionScope       = !reader.IsDBNull(7) && reader.GetBoolean(7);
-
-                var historicalPrecisionStr  = reader.IsDBNull(8) ? null : reader.GetString(8);
+                var historicalPrecisionStr  = reader.IsDBNull(8) ? null : reader.GetString(12);
                 var historicalPrecision     = ParseHistoricalPrecision(historicalPrecisionStr);
 
-                var signalStabilityStr      = reader.IsDBNull(9) ? null : reader.GetString(9);
+                var signalStabilityStr      = reader.IsDBNull(9) ? null : reader.GetString(13);
                 var signalStability         = ParseSignalStability(signalStabilityStr);
 
-                var linkedCujoJourney       = reader.IsDBNull(10) ? null : NullIfEmpty(reader.GetString(10));
-                var linkedIcmIncidentId     = reader.IsDBNull(11) ? null : NullIfEmpty(reader.GetString(11));
+                var linkedCujoJourney       = reader.IsDBNull(10) ? null : NullIfEmpty(reader.GetString(14));
 
                 results.Add(new MonitorEvaluationInput(
                     MonitorId:                       id,
-                    MonitorName:                     !string.IsNullOrWhiteSpace(monitorName) ? monitorName : monitorId,
-                    MonitorType:                     string.IsNullOrWhiteSpace(monitorType) ? null : monitorType,
                     LinkedCujoJourney:               linkedCujoJourney,
-                    OutageDrivingIcmMapping:         isOutageDriving,
+                    isBrainAOD:                      isBrainAOD,
                     DetectedImpactType:              detectedImpactType,
-                    LocationIdPresent:               locationIdPresent,
+                    isLIDCompliant:                  isLidCompliant,
                     RegionalScopeDetectable:         regionalScope,
                     SubscriptionScopeDetectable:     subscriptionScope,
                     HistoricalPrecision:             historicalPrecision,
                     SignalStability:                 signalStability,
-                    LinkedICMIncidentId:             linkedIcmIncidentId));
+                    AllIncidents:                    allIncidents));
             }
         }, cancellationToken);
 

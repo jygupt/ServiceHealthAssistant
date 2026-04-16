@@ -565,11 +565,9 @@ public class MonitorBrainIntegrationTests
         bool commRelevantImpact = false) =>
         new MonitorBrainIntegrationRequest(
             "TestMonitor",
-            MonitorType: "MdmMetricMonitor",
-            LinkedCujoJourney: linkedCujoJourney,
-            OutageDrivingIcmMapping: outageDrivingIcmMapping,
+            isBrainAOD: outageDrivingIcmMapping,
             DetectedImpactType: impactType,
-            LocationIdPresent: lidPresence,
+            isLIDCompliant: lidPresence,
             RegionalScopeDetectable: regionalScope,
             SubscriptionScopeDetectable: subscriptionScope,
             HistoricalPrecision: precision,
@@ -774,16 +772,5 @@ public class MonitorBrainIntegrationTests
 
         Assert.Equal(BrainIntentStatus.NotClassified, result.BrainIntent.AutoComms);
     }
-
-    // --- Output shape ---
-
-    [Fact]
-    public void Result_MonitorNameIsPreserved()
-    {
-        var req = new MonitorBrainIntegrationRequest("MyMonitor-001");
-
-        var result = ServiceHealthRules.EvaluateMonitorBrainIntegration(req);
-
-        Assert.Equal("MyMonitor-001", result.MonitorName);
-    }
+    
 }

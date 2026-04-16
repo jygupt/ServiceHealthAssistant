@@ -134,7 +134,6 @@ public sealed class BrainIntentPersistenceTools
                     summary = rows.Select(r => new
                     {
                         monitorId          = r.MonitorId,
-                        monitorName        = r.MonitorName,
                         brainAwareness     = r.BrainAwareness.ToString(),
                         outageDeclaration  = r.OutageDeclaration.ToString(),
                         deploymentStops    = r.DeploymentStops.ToString(),
@@ -237,7 +236,6 @@ public sealed class BrainIntentPersistenceTools
                 summary = rows.Select(r => new
                 {
                     monitorId          = r.MonitorId,
-                    monitorName        = r.MonitorName,
                     brainAwareness     = r.BrainAwareness.ToString(),
                     outageDeclaration  = r.OutageDeclaration.ToString(),
                     deploymentStops    = r.DeploymentStops.ToString(),
@@ -377,8 +375,6 @@ public sealed class BrainIntentPersistenceTools
                 ServiceId:                   serviceId,
                 ServiceName:                 serviceName,
                 MonitorId:                   monitorId,
-                MonitorName:                 monitorName,
-                MonitorType:                 monitorType,
                 IsSLI:                       isSli,
                 BrainAwareness:              brainAwareness,
                 OutageDeclaration:           outageDeclaration,
@@ -388,7 +384,7 @@ public sealed class BrainIntentPersistenceTools
                 EvaluationTimestamp:         evalTimestamp,
                 CujoJourney:                 GetString(e, "CujoJourney"),
                 LinkedICMIncidentId:         GetString(e, "LinkedICMIncidentId"),
-                LocationIdPresent:           GetNullableBool(e, "LocationIdPresent"),
+                LIDCompliant:               GetNullableBool(e, "LIDCompliant"),
                 RegionalScopeDetectable:     GetNullableBool(e, "RegionalScopeDetectable"),
                 SubscriptionScopeDetectable: GetNullableBool(e, "SubscriptionScopeDetectable"),
                 HistoricalPrecision:         GetNullableEnum<HistoricalPrecision>(e, "HistoricalPrecision"),
@@ -421,19 +417,17 @@ public sealed class BrainIntentPersistenceTools
 
             return new MonitorEvaluationInput(
                 MonitorId:                       id,
-                MonitorName:                     name,
-                MonitorType:                     GetString(e, "MonitorType"),
                 LinkedCujoJourney:               GetString(e, "LinkedCujoJourney"),
-                OutageDrivingIcmMapping:         GetBool(e, "OutageDrivingIcmMapping"),
+                isBrainAOD:         GetBool(e, "isBrainAOD"),
                 DetectedImpactType:              GetEnum(e, "DetectedImpactType", DetectedImpactType.Operational),
-                LocationIdPresent:               GetBool(e, "LocationIdPresent"),
+                isLIDCompliant:               GetBool(e, "LIDCompliant"),
                 RegionalScopeDetectable:         GetBool(e, "RegionalScopeDetectable"),
                 SubscriptionScopeDetectable:     GetBool(e, "SubscriptionScopeDetectable"),
                 HistoricalPrecision:             GetEnum(e, "HistoricalPrecision", HistoricalPrecision.Low),
                 SignalStability:                 GetEnum(e, "SignalStability", SignalStability.Unknown),
                 UsedInOutageDeclarationPreviously: GetBool(e, "UsedInOutageDeclarationPreviously"),
                 CommunicationRelevantImpact:     GetBool(e, "CommunicationRelevantImpact"),
-                LinkedICMIncidentId:             GetString(e, "LinkedICMIncidentId"));
+                AllIncidents:             GetString(e, "LinkedICMIncidentId"));
         }).ToList().AsReadOnly();
     }
 

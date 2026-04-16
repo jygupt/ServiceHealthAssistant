@@ -11,20 +11,18 @@ namespace ServiceHealthAssistant.Evaluators;
 /// <see cref="MonitorId"/> and optional <see cref="LinkedICMIncidentId"/>.
 /// </summary>
 public sealed record MonitorEvaluationInput(
-    string MonitorId,
-    string MonitorName,
-    string? MonitorType = null,
+    string MonitorId,   
     string? LinkedCujoJourney = null,
-    bool OutageDrivingIcmMapping = false,
+    bool isBrainAOD = false,
     DetectedImpactType DetectedImpactType = DetectedImpactType.Operational,
-    bool LocationIdPresent = false,
+    bool isLIDCompliant = false,
     bool RegionalScopeDetectable = false,
     bool SubscriptionScopeDetectable = false,
     HistoricalPrecision HistoricalPrecision = HistoricalPrecision.Low,
     SignalStability SignalStability = SignalStability.Unknown,
     bool UsedInOutageDeclarationPreviously = false,
     bool CommunicationRelevantImpact = false,
-    string? LinkedICMIncidentId = null);
+    string? AllIncidents = null);
 
 /// <summary>
 /// Orchestrates per-monitor Brain Intent evaluation for an entire service and
@@ -218,12 +216,10 @@ public sealed class BrainIntentServiceEvaluator
         DateTime evaluationTimestamp)
     {
         var req = new MonitorBrainIntegrationRequest(
-            MonitorName:                     monitor.MonitorName,
-            MonitorType:                     monitor.MonitorType,
             LinkedCujoJourney:               monitor.LinkedCujoJourney,
-            OutageDrivingIcmMapping:         monitor.OutageDrivingIcmMapping,
+            isBrainAOD:                      monitor.isBrainAOD,
             DetectedImpactType:              monitor.DetectedImpactType,
-            LocationIdPresent:               monitor.LocationIdPresent,
+            isLIDCompliant:                  monitor.isLIDCompliant,
             RegionalScopeDetectable:         monitor.RegionalScopeDetectable,
             SubscriptionScopeDetectable:     monitor.SubscriptionScopeDetectable,
             HistoricalPrecision:             monitor.HistoricalPrecision,
@@ -237,8 +233,6 @@ public sealed class BrainIntentServiceEvaluator
             ServiceId:                  serviceId,
             ServiceName:                serviceName,
             MonitorId:                  monitor.MonitorId,
-            MonitorName:                monitor.MonitorName,
-            MonitorType:                monitor.MonitorType ?? string.Empty,
             IsSLI:                      false,
             BrainAwareness:             result.BrainIntent.BrainAwareness,
             OutageDeclaration:          result.BrainIntent.OutageDeclaration,
@@ -247,8 +241,8 @@ public sealed class BrainIntentServiceEvaluator
             EvaluationSource:           EvaluationSource,
             EvaluationTimestamp:        evaluationTimestamp,
             CujoJourney:                monitor.LinkedCujoJourney,
-            LinkedICMIncidentId:        monitor.LinkedICMIncidentId,
-            LocationIdPresent:          monitor.LocationIdPresent,
+            LinkedICMIncidentId:        monitor.AllIncidents,
+            LIDCompliant:               monitor.isLIDCompliant,
             RegionalScopeDetectable:    monitor.RegionalScopeDetectable,
             SubscriptionScopeDetectable: monitor.SubscriptionScopeDetectable,
             HistoricalPrecision:        monitor.HistoricalPrecision,

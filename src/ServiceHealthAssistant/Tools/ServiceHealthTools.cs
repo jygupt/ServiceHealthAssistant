@@ -261,7 +261,7 @@ public sealed class ServiceHealthTools
         [Description("True if the monitor detects communication-relevant customer impact.")] bool communicationRelevantImpact = false)
     {
         var req = new MonitorBrainIntegrationRequest(
-            monitorName, monitorType, linkedCujoJourney,
+             linkedCujoJourney,
             outageDrivingIcmMapping, detectedImpactType,
             locationIdPresent, regionalScopeDetectable, subscriptionScopeDetectable,
             historicalPrecision, signalStability,

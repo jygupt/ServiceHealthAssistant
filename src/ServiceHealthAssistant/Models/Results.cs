@@ -81,7 +81,6 @@ public sealed record MonitorBrainIntentClassification(
 
 /// <summary>Result of evaluating a Geneva Service Monitor's suitability for Brain integration.</summary>
 public sealed record MonitorBrainIntegrationResult(
-    string MonitorName,
     MonitorBrainIntentClassification BrainIntent);
 
 /// <summary>Service health summary.</summary>

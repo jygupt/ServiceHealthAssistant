@@ -19,27 +19,23 @@ public class BrainIntentNormalizationTests
     {
         var monitor = new MonitorEvaluationInput(
             MonitorId: "mon-001",
-            MonitorName: "CheckoutAvailability",
-            MonitorType: "MdmMetricMonitor",
             LinkedCujoJourney: "CJ-checkout",
-            OutageDrivingIcmMapping: true,
+            isBrainAOD: true,
             DetectedImpactType: DetectedImpactType.Customer,
-            LocationIdPresent: true,
+            isLIDCompliant: true,
             RegionalScopeDetectable: true,
             SubscriptionScopeDetectable: true,
             HistoricalPrecision: HistoricalPrecision.High,
             SignalStability: SignalStability.Stable,
             UsedInOutageDeclarationPreviously: true,
             CommunicationRelevantImpact: true,
-            LinkedICMIncidentId: "IcM-999");
+            AllIncidents: "IcM-999");
 
         var row = BrainIntentServiceEvaluator.Evaluate("svc-123", "CheckoutService", monitor, FixedTimestamp);
 
         Assert.Equal("svc-123", row.ServiceId);
         Assert.Equal("CheckoutService", row.ServiceName);
         Assert.Equal("mon-001", row.MonitorId);
-        Assert.Equal("CheckoutAvailability", row.MonitorName);
-        Assert.Equal("MdmMetricMonitor", row.MonitorType);
         Assert.False(row.IsSLI);
         Assert.Equal(BrainIntentStatus.Enabled, row.BrainAwareness);
         Assert.Equal(BrainIntentStatus.Enabled, row.OutageDeclaration);
@@ -50,7 +46,7 @@ public class BrainIntentNormalizationTests
         Assert.Equal(FixedTimestamp, row.EvaluationTimestamp);
         Assert.Equal("CJ-checkout", row.CujoJourney);
         Assert.Equal("IcM-999", row.LinkedICMIncidentId);
-        Assert.True(row.LocationIdPresent);
+        Assert.True(row.LIDCompliant);
         Assert.True(row.RegionalScopeDetectable);
         Assert.True(row.SubscriptionScopeDetectable);
         Assert.Equal(HistoricalPrecision.High, row.HistoricalPrecision);
@@ -63,7 +59,6 @@ public class BrainIntentNormalizationTests
     {
         var monitor = new MonitorEvaluationInput(
             MonitorId: "mon-002",
-            MonitorName: "DiskUtilization",
             DetectedImpactType: DetectedImpactType.Operational);
 
         var row = BrainIntentServiceEvaluator.Evaluate("svc-999", "InfraService", monitor, FixedTimestamp);
@@ -79,7 +74,6 @@ public class BrainIntentNormalizationTests
     {
         var monitor = new MonitorEvaluationInput(
             MonitorId: "mon-003",
-            MonitorName: "ApiLatency",
             DetectedImpactType: DetectedImpactType.Customer
             // No LinkedCujoJourney, OutageDrivingIcmMapping defaults false
         );
@@ -93,15 +87,14 @@ public class BrainIntentNormalizationTests
     public void Evaluate_NullOptionalFields_AreNullInRow()
     {
         var monitor = new MonitorEvaluationInput(
-            MonitorId: "mon-004",
-            MonitorName: "SimpleMonitor");
+            MonitorId: "mon-004");
 
         var row = BrainIntentServiceEvaluator.Evaluate("svc-789", "", monitor, FixedTimestamp);
 
         Assert.Null(row.CujoJourney);
         Assert.Null(row.LinkedICMIncidentId);
         // MonitorType is mapped from null input to empty string in the ADX row.
-        Assert.Equal(string.Empty, row.MonitorType);
+        Assert.Equal(string.Empty, row.MonitorId);
     }
 
     [Fact]
@@ -117,7 +110,6 @@ public class BrainIntentNormalizationTests
     {
         var monitor = new MonitorEvaluationInput(
             MonitorId: "mon-006",
-            MonitorName: "DeploySignal",
             DetectedImpactType: DetectedImpactType.Deployment,
             SubscriptionScopeDetectable: false);
 
