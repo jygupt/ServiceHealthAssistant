@@ -116,6 +116,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 var detectedImpactTypeStr = reader.IsDBNull(4) ? null : reader.GetString(8);
                 var detectedImpactType = ParseImpactType(detectedImpactTypeStr);
                 var allIncidents = reader.IsDBNull(2) ? null : reader.GetString(3);
+                var allIncidentsCount = !reader.IsDBNull(5) ? reader.GetInt32(7) : 0;
                 var isLidCompliant       = !reader.IsDBNull(5) && reader.GetBoolean(9);
                 var regionalScope           = !reader.IsDBNull(6) && reader.GetBoolean(10);
                 var subscriptionScope       = !reader.IsDBNull(7) && reader.GetBoolean(11);
@@ -127,7 +128,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 var signalStability         = ParseSignalStability(signalStabilityStr);
 
                 var linkedCujoJourney       = reader.IsDBNull(10) ? null : NullIfEmpty(reader.GetString(14));
-
+                var UsedInOutageDeclarationPreviously = allIncidentsCount > 0 ? true : false;
                 results.Add(new MonitorEvaluationInput(
                     MonitorId:                       id,
                     LinkedCujoJourney:               linkedCujoJourney,
@@ -138,6 +139,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                     SubscriptionScopeDetectable:     subscriptionScope,
                     HistoricalPrecision:             historicalPrecision,
                     SignalStability:                 signalStability,
+                    UsedInOutageDeclarationPreviously: UsedInOutageDeclarationPreviously,
                     AllIncidents:                    allIncidents));
             }
         }, cancellationToken);
