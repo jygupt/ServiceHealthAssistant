@@ -2,9 +2,9 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
+using ServiceHealthAssistant.Adx;
 using ServiceHealthAssistant.Evaluators;
 using ServiceHealthAssistant.Models;
-using ServiceHealthAssistant.Rules;
 
 namespace ServiceHealthAssistant.Tools;
 
@@ -39,7 +39,7 @@ public sealed class CoverageGapTools
     [Description(
         "Detect coverage gaps for a service. " +
         "When cujoIds is omitted, CUJO data is automatically fetched from " +
-        "cluster('sherica-prod.uksouth.kusto.windows.net').database('Analytics') " +
+        "cluster('sherica-prod.uksouth.kusto.windows.net').database('sherica-prod') " +
         "using CUJOMetadata, CujoToSloRelationship, and CujoToMonitorRelationship tables — " +
         "a CUJO is flagged as a DetectionGap when it has neither an SLO nor a monitor mapping (isCujoMapped = false). " +
         "Optionally supply cujoIds (comma-separated) to skip the auto-fetch and evaluate only those CUJOs. " +
@@ -82,7 +82,7 @@ public sealed class CoverageGapTools
                 return JsonSerializer.Serialize(new
                 {
                     serviceId,
-                    dataSource = "cluster('sherica-prod.uksouth.kusto.windows.net').database('Analytics') — CUJOMetadata + CujoToSloRelationship + CujoToMonitorRelationship",
+                    dataSource = "cluster('sherica-prod.uksouth.kusto.windows.net').database('sherica-prod') — CUJOMetadata + CujoToSloRelationship + CujoToMonitorRelationship",
                     totalCujos = result.TotalCujos,
                     unmappedCujos = result.UnmappedCujos,
                     gaps = result.Gaps,
@@ -100,11 +100,56 @@ public sealed class CoverageGapTools
             }
         }
 
-        // Case 2: cujoIds provided — to be implemented in a future iteration.
+        // Case 2: cujoIds provided — try to parse as JSON array of CujoMappingRow first,
+        // then fall back to treating as comma-separated CUJO IDs (fetch from Kusto).
+        IReadOnlyList<CujoMappingRow>? parsedRows = null;
+        try
+        {
+            var trimmed = cujoIds.Trim();
+            if (trimmed.StartsWith('['))
+            {
+                parsedRows = JsonSerializer.Deserialize<List<CujoMappingRow>>(trimmed, JsonOptions);
+            }
+        }
+        catch (JsonException)
+        {
+            // Not a JSON array — fall through to the comma-separated ID path.
+        }
+
+        if (parsedRows is not null)
+        {
+            // Case 2a: caller supplied pre-formed CujoMappingRow objects as JSON.
+            try
+            {
+                var result = _analyzer.AnalyzeFromRows(serviceId, parsedRows);
+                return JsonSerializer.Serialize(new
+                {
+                    serviceId,
+                    dataSource = "caller-supplied cujoIds (parsed as CujoMappingRow JSON array)",
+                    totalCujos = result.TotalCujos,
+                    unmappedCujos = result.UnmappedCujos,
+                    gaps = result.Gaps,
+                    total = result.Gaps.Count,
+                    note = "Signal quality gaps, automation readiness gaps, and SLI promotion candidates will be evaluated in a future iteration."
+                }, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"Gap analysis failed: {ex.Message}",
+                    serviceId
+                }, JsonOptions);
+            }
+        }
+
+        // Case 2b: comma-separated CUJO ID strings — not yet implemented.
+        // Future: fetch specific CUJOs from Analytics filtered to these IDs.
         return JsonSerializer.Serialize(new
         {
             serviceId,
-            note = "Evaluation using explicit cujoIds is not yet implemented. Omit cujoIds to auto-fetch from the Analytics cluster.",
+            note = "Passing cujoIds as a comma-separated list of ID strings is not yet implemented. " +
+                   "Either omit cujoIds (auto-fetch from Analytics) or pass a JSON array of CujoMappingRow objects.",
             cujoIds
         }, JsonOptions);
     }

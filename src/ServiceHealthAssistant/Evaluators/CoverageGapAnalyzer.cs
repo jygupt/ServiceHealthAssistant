@@ -46,6 +46,39 @@ public sealed class CoverageGapAnalyzer
             "Fetched {Total} CUJOs for service '{ServiceId}'. Evaluating detection gaps.",
             cujos.Count, serviceId);
 
+        var result = AnalyzeFromRows(serviceId, cujos);
+
+        _logger.LogInformation(
+            "Detection gap analysis complete for service '{ServiceId}': {GapCount} gap(s) from {Total} CUJO(s).",
+            serviceId, result.Gaps.Count, cujos.Count);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Runs detection gap analysis against a pre-loaded set of <see cref="CujoMappingRow"/> objects.
+    /// Use this when the caller has already fetched or parsed CUJO rows (e.g. from a JSON parameter).
+    /// </summary>
+    /// <param name="serviceId">ServiceTree ID used to label the result.</param>
+    /// <param name="rows">Pre-loaded CUJO mapping rows to evaluate.</param>
+    /// <returns>A <see cref="CoverageGapAnalysisResult"/> for the provided rows.</returns>
+    public CoverageGapAnalysisResult AnalyzeFromRows(string serviceId, IReadOnlyList<CujoMappingRow> rows)
+    {
+        var gaps = BuildDetectionGaps(rows);
+        return new CoverageGapAnalysisResult(
+            ServiceId: serviceId,
+            TotalCujos: rows.Count,
+            UnmappedCujos: gaps.Count,
+            Cujos: rows,
+            Gaps: gaps);
+    }
+
+    /// <summary>
+    /// Core gap-detection loop: flags every CUJO where <see cref="CujoMappingRow.IsCujoMapped"/> is false.
+    /// Shared by both the auto-fetch and the caller-supplied-rows code paths.
+    /// </summary>
+    private static IReadOnlyList<CoverageGap> BuildDetectionGaps(IReadOnlyList<CujoMappingRow> cujos)
+    {
         var gaps = new List<CoverageGap>();
 
         foreach (var cujo in cujos)
@@ -73,16 +106,7 @@ public sealed class CoverageGapAnalyzer
             }
         }
 
-        _logger.LogInformation(
-            "Detection gap analysis complete for service '{ServiceId}': {GapCount} gap(s) from {Total} CUJO(s).",
-            serviceId, gaps.Count, cujos.Count);
-
-        return new CoverageGapAnalysisResult(
-            ServiceId: serviceId,
-            TotalCujos: cujos.Count,
-            UnmappedCujos: gaps.Count,
-            Cujos: cujos,
-            Gaps: gaps.AsReadOnly());
+        return gaps.AsReadOnly();
     }
 }
 
