@@ -126,12 +126,15 @@ builder.Services
     .WithStdioServerTransport()
     .WithTools<ServiceHealthTools>()
     .WithTools<BrainIntentPersistenceTools>()
-    .WithTools<BrainCapabilityRepairTools>();
+    .WithTools<BrainCapabilityRepairTools>()
+    .WithTools<CoverageGapTools>();
 
 builder.Services.AddSingleton<IKustoBrainIntentWriter, KustoBrainIntentWriter>();
 builder.Services.AddSingleton<IGenevaMonitorFetcher, GenevaMonitorFetcher>();
 builder.Services.AddSingleton<IShericaMonitorFetcher, ShericaMonitorFetcher>();
+builder.Services.AddSingleton<IShericaCujoFetcher, ShericaCujoFetcher>();
 builder.Services.AddSingleton<BrainIntentServiceEvaluator>();
+builder.Services.AddSingleton<CoverageGapAnalyzer>();
 
 // Bulk repair agent services.
 builder.Services.AddSingleton<IGenevaMonitorMetadataClient, GenevaMonitorMetadataClient>();
