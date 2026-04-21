@@ -128,7 +128,7 @@ public sealed class ShericaMonitorFetcher : IShericaMonitorFetcher, IDisposable
                 var signalStability         = ParseSignalStability(signalStabilityStr);
 
                 var linkedCujoJourney       = reader.IsDBNull(10) ? null : NullIfEmpty(reader.GetString(14));
-                var UsedInOutageDeclarationPreviously = allIncidentsCount > 0 ? true : false;
+                var UsedInOutageDeclarationPreviously = allIncidentsCount > 0 && isBrainAOD ? true : false;
                 results.Add(new MonitorEvaluationInput(
                     MonitorId:                       id,
                     LinkedCujoJourney:               linkedCujoJourney,
