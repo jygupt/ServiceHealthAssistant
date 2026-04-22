@@ -142,30 +142,6 @@ public sealed class ServiceHealthTools
     }
 
     // -----------------------------------------------------------------------
-    // Tool: detect_coverage_gaps
-    // -----------------------------------------------------------------------
-
-    [McpServerTool(Name = "detect_coverage_gaps")]
-    [Description("Detect coverage gaps for a service: CUJOs without SLI coverage, low-quality signals, and automation readiness gaps. Classifies each gap as DetectionGap, SignalQualityGap, or AutomationReadinessGap.")]
-    public static string DetectCoverageGaps(
-        [Description("Service name.")] string serviceName,
-        [Description("Comma-separated list of CUJO IDs the service should cover.")] string cujoIds = "",
-        [Description("JSON array of SLI objects: [{\"Id\":\"...\",\"Name\":\"...\",\"BrainAware\":true,\"CujoIds\":[\"...\"],\"QualityScores\":{\"overall\":0.9}}]")] string slisJson = "[]",
-        [Description("JSON array of Service Monitor objects: [{\"Id\":\"...\",\"Name\":\"...\",\"SliPromotionEligible\":true}]")] string monitorsJson = "[]")
-    {
-        var cujoList = string.IsNullOrWhiteSpace(cujoIds)
-            ? []
-            : cujoIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                     .ToList();
-
-        var slis     = ParseSlis(slisJson, serviceName);
-        var monitors = ParseMonitors(monitorsJson, serviceName);
-
-        var gaps = ServiceHealthRules.DetectCoverageGaps(serviceName, cujoList, slis, monitors);
-        return JsonSerializer.Serialize(new { gaps, total = gaps.Count }, JsonOptions);
-    }
-
-    // -----------------------------------------------------------------------
     // Tool: generate_repair_items
     // -----------------------------------------------------------------------
 
